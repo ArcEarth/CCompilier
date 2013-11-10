@@ -154,3 +154,6 @@ $RECYCLE.BIN/
 
 # Mac desktop service store files
 .DS_Store
+/src/C1.tab.c
+/src/C1.tab.h
+/src/C1.lex.c

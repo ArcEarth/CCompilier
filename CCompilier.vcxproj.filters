@@ -66,4 +66,14 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="doc\Interpreter.ReadMe.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="doc\P5.pdf">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
 </Project>

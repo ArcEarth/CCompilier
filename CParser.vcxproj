@@ -36,26 +36,20 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <NMakeBuildCommandLine>nmake.exe -f makefile src\C1.tab.c src\C1.lex.c</NMakeBuildCommandLine>
-    <NMakeOutput>C1.tab.c;C1.lex.c</NMakeOutput>
-    <NMakeCleanCommandLine>nmake.exe -f makefile clean</NMakeCleanCommandLine>
+    <NMakeBuildCommandLine>nmake -f makefile src\C1.tab.c src\C1.lex.c</NMakeBuildCommandLine>
+    <NMakeOutput>src\C1.tab.c;src\C1.lex.c</NMakeOutput>
+    <NMakeCleanCommandLine>nmake -f makefile clean</NMakeCleanCommandLine>
     <NMakePreprocessorDefinitions>WIN32;_DEBUG;DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
-    <NMakeReBuildCommandLine>nmake.exe -f makefile src\C1.tab.c src\C1.lex.c</NMakeReBuildCommandLine>
+    <NMakeReBuildCommandLine>nmake -f makefile src\C1.tab.c src\C1.lex.c</NMakeReBuildCommandLine>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <NMakeBuildCommandLine>bison.exe -d -y -v -o C1.tab.c config\C1.y
-flex.exe -oC1.lex.c config/C1.lex
-</NMakeBuildCommandLine>
-    <NMakeOutput>C1.tab.c;C1.tab.h;C1.lex.c</NMakeOutput>
-    <NMakeCleanCommandLine>del C1.tab.c
-del C1.tab.h
-del C1.lex.c</NMakeCleanCommandLine>
+    <NMakeBuildCommandLine>nmake -f makefile src\C1.tab.c src\C1.lex.c</NMakeBuildCommandLine>
+    <NMakeOutput>src\C1.tab.c;src\C1.lex.c</NMakeOutput>
+    <NMakeCleanCommandLine>nmake -f makefile clean</NMakeCleanCommandLine>
     <NMakePreprocessorDefinitions>WIN32;NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>include\;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
-    <NMakeReBuildCommandLine>bison.exe -d -y -v -o C1.tab.c config\C1.y
-flex.exe -oC1.lex.c config/C1.lex
-</NMakeReBuildCommandLine>
+    <NMakeReBuildCommandLine>nmake -f makefile src\C1.tab.c src\C1.lex.c</NMakeReBuildCommandLine>
   </PropertyGroup>
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>

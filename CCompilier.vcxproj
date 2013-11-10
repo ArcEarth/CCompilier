@@ -92,6 +92,12 @@
     <ClCompile Include="src\symtab.c" />
     <ClCompile Include="src\Type.c" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="doc\Interpreter.ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="doc\P5.pdf" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
