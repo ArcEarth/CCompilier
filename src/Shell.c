@@ -1,23 +1,33 @@
+/*
+* The shell of the compilier, interpret the command line arguments, output to file
+*/
+
 #include "common.h"
+#include "pcodegen.h"
+#include <string.h>
 #include <stdio.h>
+#include <malloc.h>
 
-Table symtab;
-ASTTree ast;
-FILE *outfile;
 
-extern int yyparse();
+//SymbolTable symtab = NULL; //Strong defineation
+//ASTree ast = NULL;
+extern struct BitCodes codeGen(ASTree ast);
+extern ASTree parse();
 
-int main(int argc, char *argv[])
+int main(int argc, char *argv [])
 {
 
-	symtab = newTable();
-	ast = newAST();
-	TypeSystemInitilize();
+	FILE* outfile = NULL;
+	char infilename[256], outfilename[256];
+
+	// Section of parsing command line arguments
+	// Added by Yupeng
 	int k, flag = 0;
-	for (k = 1; k<argc; k++)
+	for (k = 1; k < argc; k++)
 	{
 		if (argv[k][0] != '-') {
-			freopen(argv[1], "r", stdin);
+			strcpy(infilename, argv[1]);
+			freopen(infilename, "r", stdin);
 			flag = 1;
 		}
 		else {
@@ -28,19 +38,53 @@ int main(int argc, char *argv[])
 					printf("Error : Inlegal command. There must be a param after -o option.\n");
 				}
 				else
-					outfile = fopen(argv[k], "w");
+				{
+					strcpy(outfilename, argv[k]);
+					outfile = fopen(outfilename, "wb");
+				}
 			}
 		}
 	}
 	if (!flag) printf("Warning : haven't decide a source file, system will take the standard input as source.\n");
 	if (outfile == NULL)
-		outfile = fopen("a.o", "w");
+		outfile = fopen("a.o", "wb");
+	// End of Arguments parsing
+
 	printf("Parsing ...\n");
-	yyparse();
+	ASTree ast = parse();
 	printf("\n\nDump the program from the generated AST:\n");
-	dumpAST(ast->root);
-	GenAST(ast->root);
-	destroyAST(&ast->root);
-	destroyTable(&symtab);
+	dumpASTNode(ast->root, 0);
+
+	// Section of code generate and output to file
+	// Added by Yupeng Zhang
+	printf("\n\nPCode generated from the generated AST:\n");
+	PcodeGenerater generator = newPcodeGenerater();
+	generate(generator, ast->root);
+
+	int result;
+	printCodes(generator->code, generator->cx);
+	result = fwrite(&generator->cx, sizeof(long), 1, outfile);
+	result = fwrite(generator->code, sizeof(instruction), generator->cx, outfile);
+	fclose(outfile);
+	
+	//freopen(outfilename, "r", outfile);
+
+	//system("PAUSE");
+	//printf("=====================\n");
+	//FILE* infile = fopen(outfilename, "r");
+	//if (outfile){
+	//	int len = fread(&len, sizeof(long), 1, outfile);
+	//	instruction* code = (instruction*) malloc(sizeof(instruction) *(len + 1));
+	//	fread(code, sizeof(instruction), len, outfile);
+	//	printCodes(code, len);
+	//	fclose(outfile);
+	//	free(code);
+	//}
+
+	// End of Section
+	destroyAST(&ast);
+	destroyPcodeGenerater(&generator);
+	printf("\n\nFinished destroying AST.\n");
+
 	return(0);
 }

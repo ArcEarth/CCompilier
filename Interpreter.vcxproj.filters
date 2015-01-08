@@ -15,16 +15,13 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\op.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\type.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
+    <ClCompile Include="src\interpret.c">
+      <Filter>Resource Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\Interpreter.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
+    <ClInclude Include="include\pcode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

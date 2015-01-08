@@ -1,760 +1,1479 @@
-/*
- * asgn.y : A simple yacc assignment statement parser
- *          Based on the Bison manual example. 
- * The parser computes each assignment and output its value.
- * Author: Yu Zhang (yuzhang@ustc.edu.cn)
- */
+%require "3.0"
+%skeleton "lalr1.cc"
+%defines 
+%define api.namespace {C1}
+%define api.token.constructor
+%define api.value.type variant
+%define parser_class_name {BisonParser}
+%param { C1::AST::ASTContext& context }
+%param { C1::FlexScanner& scanner }
 
-%{
-#include <stdio.h>
-#include <math.h>
-#include <common.h>
-extern Table symtab;
-extern ASTTree ast;
-extern Type Int,Float,Char,Bool,Void,ConstBool,ConstInt,ConstFloat,ConstChar,String; //
-static Type TypeCache;
-static Type ReturnType;
-static int paramcounter,ReturnAddr;
-static Symbol FunctionCallCache;
-static ListItr Pitr;
+%define parse.assert
+%define parse.trace
+%define parse.error verbose
 
-int yyerror(char *message);
-extern int yylex();
-%}
 
-%union {
-//	float fval;
-	char *name;
-	int  ival;
-	Value val;
-	Type tval;
-	ASTNode node;
-	Symbol sym;
+%code requires {
+	#include "operators.h"
+	#include "type.h"
+	#include "declaration.h"
+	#include "ast.h"
+	//#define YYDEBUG 3
+	// Forward-declare the Scanner class; the Parser needs to be assigned a 
+	// Scanner, but the Scanner can't be declared without the Parser
+	namespace C1 {
+		class FlexScanner;
+		namespace AST {
+			typedef AST::Expr *ExprPtr;
+		}
+	}
 }
+
+%code {
+	// Prototype for the yylex function
+	//static int yylex(C1::BisonParser::semantic_type * yylval,C1::BisonParser::location_type * yylloc,C1::AST::ASTContext&, C1::FlexScanner &scanner);
+	static C1::BisonParser::symbol_type yylex(C1::AST::ASTContext&, C1::FlexScanner &scanner);
+	static int debug(const char* message)
+	{
+		return printf(message);
+	}
+	using namespace C1::AST;
+	using namespace std;
+}
+
 %locations
+%token 
+	END "eof"
+	WHILE "while"
+	IF "if"
+	ELSE "else"
+	FOR "for"
+	DO "do"
+	SWITCH "switch"
+	GOTO "goto"
+	BREAK "break"
+	RETURN "return"
+	CONTINUE "continue"
+	CASE "case"
+	DEFAULT "defaul"
+	TYPEDEF "typedef"
+	READ "read"
+	WRITE "write"
+	COMMA ","
+	SEMICOLON ";"
+	COLON ":"
+	QUESTION "?"
+	;
 
-%token NUMBER UNREGID TYPEID FUNCTIONID VARID BASETYPE
-%token CONSTSYM TYPEDEFSYM STATICSYM
-%token MAINSYM
-%token WHILESYM FORSYM IFSYM ELSESYM
-%token BREAKSYM RETURNSYM
-%token COMMA SEMICOLON
-%token BEGINSYM ENDSYM
-%token READSYM WRITESYM
-%token PLUS MINUS MULT DIV ASGN GEQ GTR LSS LEQ EQL NEQ ANDAND OROR NOT AND OR XOR LSH RSH BITNOT SIZEOF
-%token EOL
-%token LPAREN RPAREN
-%token LBRACK RBRACK
+%token INT VOID FLOAT DOUBLE SIGNED UNSIGNED LONG CHAR SHORT
 
-%left  USELESS
-%left  NOELSE
-%left  ELSESYM
-%right ASGN
-%left  OROR
-%left  ANDAND
-%left  OR
-%left  XOR
-%left  AND
-%left  EQL NEQ
-%left  GEQ GTR LSS LEQ
-%left  LSH RSH
-%left  MINUS PLUS
-%left  MULT DIV MOD 
-%left REFENCE
-%right NEG NOT ADDRESS DEREFENCE BITNOT SIZEOF
-%left  INDEX GROUP LBRACK LPAREN
+%token <StorageClassSpecifierEnum>
+	STATIC "static"
+	EXTERN "extern"
+	AUTO "auto"
+	REGISTER "register"
+	;
+%token <TypeQualifierEnum>
+	CONST "const" 
+	VOLATILE "volatile"
+	RESTRICT "restrict"
+	;
+%token <RecordKeywordEnum>
+	STRUCT "struct" 
+	UNION "union"
+	ENUM "enum"
+	;
 
-%type  <ival> PLUS MINUS MULT DIV MOD ASGN GEQ GTR LSS LEQ EQL NEQ ANDAND OROR NOT AND OR XOR LSH RSH BITNOT SIZEOF
-%type  <tval> Type BASETYPE
-%type  <val>  NUMBER ArrayValue
-%type  <name> UNREGID TYPEID VARID FUNCTIONID
-%type  <node> AdrExp Exp Statement DeclRegon DeclStatement VarDecl  FuncDecl TypeDecl MulStatement Program Main ParamList ArgList DelicateID InitExp MAINSYM
+%token <AST::ExprPtr> INT_LITERAL FLOAT_LITERAL STRING_LITERAL
+%token <std::string> NewIdentifier ObjectIdentifier TypeIdentifier
+
+%token <OperatorsEnum>
+	ASSIGN "="
+	MUL_ASSIGN "*="
+	ADD_ASSIGN "+="
+	DIV_ASSIGN "/="
+	SUB_ASSIGN "-="
+	AND_ASSIGN "&="
+	OR_ASSIGN "|="
+	LSH_ASSIGN "<<="
+	RSH_ASSIGN ">>="
+	MOD_ASSIGN "%="
+	XOR_ASSIGN "^="
+	ADD "+" 
+	SUB "-"
+	MUL "*"
+	DIV "/"
+	MOD "%"
+	ADDADD "++"
+	SUBSUB "--"
+	EQL "=="
+	NEQ "!="
+	LSS "<"
+	GTR ">"
+	LEQ "<="
+	GEQ "=>"
+	NOT "!"
+	ANDAND "&&"
+	OROR "||"
+	LSH "<<"
+	RSH ">>"
+	REVERSE "~"
+	AND "&"
+	OR "|"
+	XOR "^"
+	DOT "."
+	ARROW "->"
+	SIZEOF "sizeof"
+	CAST "cast"
+;
+
+%token
+	LPAREN "("
+	RPAREN ")"
+	LBRACKET "["
+	RBRACKET "]"
+	LBRACE "{"
+	RBRACE "}"
+;
+
+%left NOELSE
+%left ELSE
+%left COMMA
+%right ASSIGN MUL_ASSIGN ADD_ASSIGN DIV_ASSIGN SUB_ASSIGN AND_ASSIGN OR_ASSIGN LSH_ASSIGN RSH_ASSIGN MOD_ASSIGN XOR_ASSIGN
+%left OROR
+%left ANDAND
+%left OR
+%left XOR
+%left AND
+%left EQL NEQ
+%left LSS GTR LEQ GEQ
+%left LSH RSH
+%left ADD SUB
+%left MUL DIV MOD
+%right POSITIVE NEGTIVE NOT REVERSE ADDRESS DEREF SIZEOF ADDADD SUBSUB CAST
+%left MEMBER RBRACKET RPAREN
+
+%type <TypeQualifierEnum> TypeQualifier 
+%type <int> TypeQualifierList
+%type <StorageClassSpecifierEnum> StorageClassSpecifier
+%type <RecordKeywordEnum> RecordKeyword 
+
+%type <AST::Expr*> Expr AssignExpr ConstantExpr ConditionalExpr ArithmeticExpr CastExpr BitwiseExpr UnaryExpr PosfixExpr PrimaryExpr RelationExpr EqualityExpr LogicAndExpr LogicOrExpr
+%type <AST::Initializer*> Initializer
+%type <AST::InitializerList*> InitializerList 
+
+%type <AST::TypeSpecifier*> TypeSpecifier EnumSpecifier
+%type <AST::QualifiedTypeSpecifier*> QualifiedTypeSpecifier
+%type <AST::TypeExpr*> TypeExpr
+%type <AST::Stmt*> Stmt ExprStmt IterationStmt SelectionStmt JumpStmt DeclStmt Label ReadStmt WriteStmt
+%type <AST::CompoundStmt*> StmtList CompoundStmt
+
+%type <AST::TranslationUnit*> TranslationUnit 
+%type <AST::Node*> ExtendDeclaration
+%type <AST::FunctionDeclaration*> FunctionHeader FunctionDefination
+%type <AST::StructDeclaration *> RecordHeader RecordSpecifier
+%type <AST::StructBody*> StructBody FieldDeclarationList
+%type <AST::VarDeclStmt*> ObjectDeclaration
+%type <AST::TypedefStmt*> TypeDefination
+%type <AST::ParameterDeclaration*> ParameterDeclaration
+%type <AST::FieldDeclStmt*> FieldDeclaration
+
+%type <AST::Declarator*> Declarator DirectDeclarator AbstractDeclarator DirectAbstractDeclarator InitDeclarator FieldDeclarator
+%type <AST::Enumerator*> Enumerator
+
+
+%type <std::string> Identifier 
+
+%type <std::list<int>*> DeclaratorPointer
+%type <std::list<AST::Declarator*>*> DeclaratorList InitDeclaratorList FieldDeclaratorList
+%type <std::list<AST::Enumerator*>*> EnumeratorList
+%type <AST::ParameterList*> ParameterList
+%type <std::list<AST::Expr*>*> ArgumentList
+
+%type <OperatorsEnum> UnaryOperator AssignOperator
+
+%initial-action
+{
+// Initialize the initial location.
+@$.begin.filename = @$.end.filename = &context.FileName;
+};
+
 %%
-Program	: DeclRegon Main
-	  {
-	    	$$ = newProgram($1 , $2);
-		setLoc($$, (Loc)&(@$));
-	    	ast->root =$$;
-	    	debug("Program->DeclRegon Main EOF\n");
-	  }
-	;
-
-DeclRegon: /*Empty*/
-	  {
-	    	$$ = newBlock();
-		setLoc($$, (Loc)&(@$));
-		$$->kind = KDeclBlock;
-	  }
-	| DeclRegon DeclStatement
-	  {
-//	    	debug("A Decled has been noticed!\n");
-	    	$$ = $1;
-//		printf("Add to List %x\n",(int)($$->block->stmts));
-	    	addLast($$->block->stmts , $2);
-	  }
-	;
-
-DeclStatement: VarDecl SEMICOLON
-	  {
-	    	$$ = $1;
-		setLoc($$, (Loc)&(@$));
-	    	debug("VarDecled ;\n");
-	  }
-	| FuncDecl
-	  {
-	    	$$ = $1;
-		setLoc($$, (Loc)&(@$));
-	    	debug("FunctionDecled\n");
-	  }
-	| TypeDecl
-	  {
+%start TranslationUnit;
+TranslationUnit
+	: TranslationUnit END
+	{
 		$$ = $1;
-		setLoc($$, (Loc)&(@$));
-	  }
-	;
-
-Type	: BASETYPE
-	  {
+		$$->SetLocation(@$);
+		return 0;
+	}
+	|
+	TranslationUnit ExtendDeclaration
+	{
 		$$ = $1;
-		TypeCache = $$;
-//		printf("%d\n",$$->kind);
-	  }
-	| TYPEID //History Err : This rule will cause some fatal shift-reduce conflicts like code stmt : function (a,b); will be reduce into Type (ID,ID) and cause syntax errors.
-	  {
-		$$=lookup(symtab,$1)->type;
-		TypeCache = $$;
-	  }
-	| CONSTSYM Type
-	  {
-		$$ = newConst($2);
-		TypeCache = $$;
-//		printf("%d\n",$$->kind);
-	  }
-	| STATICSYM Type
-	  {
-		$$ = $2;
-		$$ = newStatic($2);
-		TypeCache = $$;
-	  }
+		$$ -> Children().push_back($2);
+		$2->SetParent($$);
+		$$->SetLocation(@$);
+	}
+	| %empty
+	{
+		$$ = context.CurrentTranslationUnit = new TranslationUnit(context.FileName);
+		context.push_context($$);
+	}
 	;
 
-VarDecl : Type DelicateID InitExp
-	  {
-		$2->sym->kind = OBJ_var;
-		$2->kind = KVar;
-
-		$$ = newVarList($1);
-	    	$$->kind = KVarDecls;
-		InitSym($2->sym,$3);
-	    	addLast($$->varlist->vars,$2);
-		printf("A new Var '%s' in type ",$2->sym->name);
-		dumpType($2->sym->type);
-		printf(" has regeisted.\n");
-		setLoc($$, (Loc)&(@$));
-	  }
-	| Type error
-	  {
-	    	printf("Error : VarDecl syntax error %4d(%2d)\n", @$.first_line, @$.last_column);		
-	  }
-	| VarDecl COMMA DelicateID InitExp
-	  {
-	    	$$ = $1;
-		$3->sym->kind = OBJ_var;
-		$3->kind = KVar;
-		InitSym($3->sym,$4);
-	    	addLast($$->varlist->vars,$3);
-		printf("A new Var '%s' in type ",$3->sym->name);
-		dumpType($3->sym->type);
-		printf(" has regeisted.\n");
-		setLoc($$, (Loc)&(@$));
-	  }
-	;
-
-DelicateID : UNREGID
-	  {
-		$$ = newSym(symtab,$1,TypeCache);
-	  }
-	| VARID
-	  {
-		$$ = newSym(symtab,$1,TypeCache);
-	  }
-	| FUNCTIONID
-	  {
-		$$ = newSym(symtab,$1,TypeCache);
-	  }
-	| MULT DelicateID %prec DEREFENCE
-	  {
-		$$ = $2;
-		$$->sym->type = tracePointer($$->sym->type);
-	  }
-	| DelicateID LBRACK NUMBER RBRACK %prec INDEX
-	  {
+ExtendDeclaration
+	: FunctionDefination
+	{
 		$$ = $1;
-		$$->sym->type = traceArray($$->sym->type,$3);
-	  }
-	| LPAREN DelicateID RPAREN
-	  {
-		$$ = $2;
-	  }
+	}
+	| DeclStmt
+	{
+		$$ = $1;
+	}
 	;
+
+FunctionDefination
+	: FunctionHeader CompoundStmt
+	{
+		$$ = $1;
+		$$->SetDefinition($2);
+		$$->SetLocation(@$);
+		context.pop_context();
+	}
+	;
+
+FunctionHeader
+	: StorageClassSpecifier QualifiedTypeSpecifier Declarator
+	{
+		auto declarator = $3;
+		if (dynamic_cast<FunctionalDeclarator*>(declarator) == nullptr)
+		{
+			error(@3,"Expect a function declaration here.");
+			// WTF, what should we do to recover here?!
+			// let's wrap the declarator to declarator() and process.
+			declarator = new FunctionalDeclarator(declarator,nullptr);
+		}
+		auto func = new FunctionDeclaration($1,$2,static_cast<FunctionalDeclarator*>(declarator));
+		context.current_context()->add(func);
+		// Add parameter list to the look up stack's top , which enabled the lookup of parameters
+		context.push_context(&func->Parameters());
+		$$ = func;
+		$$->SetLocation(@$);
+
+	}
+	;
+
+ObjectDeclaration
+	: StorageClassSpecifier QualifiedTypeSpecifier InitDeclaratorList
+	{
+		//$3 will be moved.
+		auto compound_decl = new VarDeclStmt($1,$2,$3);
+		$$ = compound_decl;
+		$$ -> SetLocation(@$);
+		for (auto declarator : compound_decl->DeclaratorList())
+		{
+			ValueDeclaration* decl;
+			if (dynamic_cast<FunctionalDeclarator*>(declarator) != nullptr)
+			{
+				if (context.current_context() != context.CurrentTranslationUnit)
+				error(@$,"warnning : declare/define a function inside function is not allow.");
+				// Recovery : assume the function is in global scope
+				decl = new FunctionDeclaration($1,$2,dynamic_cast<FunctionalDeclarator*>(declarator));
+				decl -> SetSourceNode(compound_decl);
+				context.CurrentTranslationUnit->add(decl);
+				// We don't need this, because we only push the parameters decl-context into context-stack if we entering a function body
+				// Popout the parameters Decl-Context
+				// context.pop_context();
+			} else if (dynamic_cast<IdentifierDeclarator*>(declarator) != nullptr && dynamic_cast<FunctionType*>($2->RepresentType().get()) != nullptr)
+			{
+				error(@$,"warnning : WTF! declaring a function type object is not allow.");
+			} else
+			{
+				auto var = new VariableDeclaration($1,$2->RepresentType(),declarator);
+				var -> SetSourceNode(compound_decl);
+				static_cast<VariableDeclaration*>(var)->ValidateInitialization();
+				context.current_context()->add(var);
+				compound_decl -> Declarations().push_back(var);
+			}
+			// add the sub-declaration into the easy access list.
+		}
+	}
+	| StorageClassSpecifier QualifiedTypeSpecifier
+	{
+		//$3 will be moved.
+		auto empty_list = new std::list<Declarator*>();
+		auto compound_decl = new VarDeclStmt($1,$2,empty_list);
+		$$ = compound_decl;
+		$$ -> SetLocation(@$);
+	}
+	;
+
+TypeDefination
+	: TYPEDEF QualifiedTypeSpecifier DeclaratorList
+	{
+		$$ = new TypedefStmt($2,$3);
+		for (auto declarator : $$->DeclaratorList())
+		{
+			auto decl = new TypedefDeclaration($2->RepresentType(),declarator);
+			decl -> SetSourceNode($$);
+			context.current_context()->add(decl);
+			$$ -> Declarations().push_back(decl);
+		}
+	}
+	;
+
+DeclaratorList
+	: DeclaratorList COMMA Declarator
+	{
+		$$ = $1;
+		$$->push_back($3);
+	}
+	| Declarator
+	{
+		$$ = new std::list<Declarator*>();
+		$$->push_back($1);
+	}
+	;
+
+Declarator
+	: DeclaratorPointer DirectDeclarator
+	{
+		auto& list = *$1;
+		Declarator *declarator = $2;
+		for (auto itr = list.rbegin();itr!=list.rend();++itr)
+		{
+			declarator = new PointerDeclarator(*itr,declarator);
+			declarator->SetLocation(@$);
+		}
+		$$ = declarator;
+		$$->SetLocation(@$);
+	}
+	| DirectDeclarator
+	{
+		$$ = $1;
+	}
+	;
+
+DirectDeclarator
+	: Identifier
+	{
+		$$ = new IdentifierDeclarator($1);
+		$$->SetLocation(@$);
+	}
+	| LPAREN Declarator RPAREN
+	{
+		$$ = new ParenDeclarator($2);
+		$$->SetLocation(@$);
+	}
+	| DirectDeclarator LBRACKET ConstantExpr RBRACKET
+	{
+		$$ = new ArrayDeclarator($1,$3);
+		$$->SetLocation(@$);
+	}
+	| DirectDeclarator LBRACKET RBRACKET
+	{
+		$$ = new ArrayDeclarator($1,nullptr);
+		$$->SetLocation(@$);
+	}
+	| DirectDeclarator LPAREN ParameterList RPAREN
+	{
+		$$ = new FunctionalDeclarator($1,$3);
+		$$->SetLocation(@$);
+	}
+	| DirectDeclarator LPAREN RPAREN
+	{
+		// Build an empty parameter list
+		auto param_list = new ParameterList();
+		$$ = new FunctionalDeclarator($1,param_list);
+		$$->SetLocation(@$);
+	}
+	;
+
+InitDeclaratorList
+	: InitDeclaratorList "," InitDeclarator
+	{
+		$$ = $1;
+		$$->push_back($3);
+	}
+	| InitDeclarator
+	{
+		$$ = new std::list<Declarator*>();
+		$$->push_back($1);
+	}
+	;
+
+InitDeclarator
+	: Declarator
+	{
+		$$ = $1;
+	}
+	| Declarator "=" Initializer
+	{
+		$$ = new InitDeclarator($1,$3);
+		$$->SetLocation(@$);
+	}
+	;
+
+Initializer
+	: ConditionalExpr
+	{
+		$$ = new AtomInitializer($1);
+		$$->SetLocation(@$);
+	}
+	| "{" InitializerList "}"
+	{
+		$$ = $2;
+		$$->SetLocation(@$);
+	}
+	| "{" InitializerList COMMA "}"
+	{
+		$$ = $2;
+		$$->SetLocation(@$);
+	}
+	;
+
+InitializerList
+	: InitializerList "," Initializer
+	{
+		$$ = $1;
+		$$->push_back($3);
+	}
+	| Initializer
+	{
+		$$ = new InitializerList(context.type_context);
+		$$->push_back($1);
+	}
+	;
+
+AbstractDeclarator
+	: DeclaratorPointer DirectAbstractDeclarator
+	{
+		auto& list = *$1;
+		Declarator *declarator = $2;
+		for (auto itr = list.rbegin();itr!=list.rend();++itr)
+		{
+			declarator = new PointerDeclarator(*itr,declarator);
+			$$->SetLocation(@$);
+		}
+		$$ = declarator;
+		$$->SetLocation(@$);
+	}
+	| DirectAbstractDeclarator
+	{
+		$$ = $1;
+	}
+	;
+
+DirectAbstractDeclarator
+	: LPAREN AbstractDeclarator RPAREN
+	{
+		$$ = new ParenDeclarator($2);
+		$$->SetLocation(@$);
+	}
+	| LBRACKET ConstantExpr RBRACKET 
+	{
+		$$ = new ArrayDeclarator(nullptr,$2);
+		$$->SetLocation(@$);
+	}
+	| LBRACKET RBRACKET
+	{
+		$$ = new ArrayDeclarator(nullptr,nullptr);
+		$$->SetLocation(@$);
+	}
+	| DirectAbstractDeclarator LBRACKET ConstantExpr RBRACKET 
+	{
+		$$ = new ArrayDeclarator($1,$3);
+		$$->SetLocation(@$);
+	}
+	| DirectAbstractDeclarator LBRACKET RBRACKET
+	{
+		$$ = new ArrayDeclarator($1,nullptr);
+		$$->SetLocation(@$);
+	}
+	| LPAREN ParameterList RPAREN
+	{
+		$$ = new FunctionalDeclarator(nullptr,$2);
+		$$->SetLocation(@$);
+	}
+	| LPAREN RPAREN
+	{
+		$$ = new FunctionalDeclarator(nullptr,nullptr);
+		$$->SetLocation(@$);
+	}
+	| DirectAbstractDeclarator LPAREN ParameterList RPAREN
+	{
+		$$ = new FunctionalDeclarator($1,$3);
+		$$->SetLocation(@$);
+		$3->SetLocation(@2 + @4);
+	}
+	| DirectAbstractDeclarator LPAREN RPAREN
+	{
+		// Build an empty parameter list
+		auto param_list = new ParameterList();
+		$$ = new FunctionalDeclarator($1,param_list);
+		$$->SetLocation(@$);
+		param_list->SetLocation(@2 + @3);
+	}
+	;
+
+ParameterList
+	: ParameterList COMMA ParameterDeclaration
+	{
+		$$ = $1;
+		$$->add($3);
+		$3->SetParent($$);
+	}
+	| ParameterDeclaration
+	{
+		$$ = new ParameterList();
+		$$->add($1);
+		$1->SetParent($$);
+	}
+	;
+
+ParameterDeclaration
+	: QualifiedTypeSpecifier Declarator
+	{
+		$$ = new ParameterDeclaration($1,$2);
+	}
+	| QualifiedTypeSpecifier AbstractDeclarator
+	{
+		$$ = new ParameterDeclaration($1,$2);
+	}
+	| QualifiedTypeSpecifier
+	{
+		$$ = new ParameterDeclaration($1,new EmptyDeclarator());
+	}
+	;
+
+DeclaratorPointer
+	: MUL TypeQualifierList
+	{
+		$$ = new std::list<int>();
+		$$->push_back($2);
+	}
+	| DeclaratorPointer MUL TypeQualifierList
+	{
+		$$->push_back($3);
+	}
+	;
+
+QualifiedTypeSpecifier
+	: TypeQualifierList TypeSpecifier
+	{
+		$$ = new QualifiedTypeSpecifier($1,$2);
+	}
+	;
+
+TypeQualifierList
+	: TypeQualifierList TypeQualifier
+	{
+		$$ |= $1;
+	}
+	| %empty
+	{
+		$$ = 0;
+	}
+	;
+
+TypeSpecifier
+	: VOID
+	{
+		$$ = new PrimaryTypeSpecifier(context.type_context->Void());
+	}
+	| INT
+	{
+		$$ = new PrimaryTypeSpecifier(context.type_context->Int());
+	}
+	| FLOAT
+	{
+		$$ = new PrimaryTypeSpecifier(context.type_context->Float());
+	}
+	| CHAR
+	{
+		$$ = new PrimaryTypeSpecifier(context.type_context->Char());
+	}
+	| RecordSpecifier
+	{
+		$$ = $1;
+	}
+	| EnumSpecifier
+	{
+		$$ = $1;
+	}
+	| TypeIdentifier
+	{
+		$$ = new TypedefNameSpecifier(context.current_context(),$1);
+		/*auto decl = dynamic_cast<TypeDeclaration*>(context.current_context()->Lookup(*$1));
+		assert(decl != nullptr);
+		$$ = decl->DeclType();*/
+	}
+	;
+
+TypeQualifier
+	: CONST
+	{
+		$$ = $1;
+	}
+	| VOLATILE 
+	{
+		$$ = $1;
+	}
+	| RESTRICT
+	{
+		$$ = $1;
+	}
+	;
+
+StorageClassSpecifier
+	: EXTERN
+	{
+		$$ = $1;
+	}
+	| STATIC
+	{
+		$$ = $1;
+	}
+	| AUTO
+	{
+		$$ = $1;
+	}
+	| REGISTER
+	{
+		$$ = $1;
+	}
+	| %empty
+	{
+		$$ = SCS_NONE;
+	}
+	;
+
+RecordSpecifier
+	: RecordHeader StructBody
+	{
+		//current_context = *context.CurrentDeclContext;
+		$$ = $1;
+		$$ -> SetLocation(@$);
+		dynamic_cast<StructDeclaration*>($$) -> SetDefinition($2);
+	}
+	| RecordHeader
+	{
+		$$ = $1;
+	}
+	| RecordKeyword StructBody
+	{
+		auto decl = new StructDeclaration($2);
+		context.current_context()->add(decl);
+		$$ = decl;
+		$$ -> SetLocation(@$);
+	}
+	;
+
+RecordHeader
+	: RecordKeyword Identifier
+	{
+		auto decl = new StructDeclaration($2);
+		auto res = context.current_context()->add(decl);
+		if (res != DeclContext::InsertionResult::Success_CompatibleRedefinition)
+		{
+			auto type = context.type_context->NewRecordType($1,$2);
+			decl->SetDeclType(type);
+			decl->SetRepresentType(type);
+		}
+		$$ = decl;
+		$$ -> SetLocation(@$);
+
+		/*auto decl = current_context->LocalLookup($2);
+		if (!decl)
+		{
+			decl = new StructDeclaration($2);
+			current_context->AddDeclaration(decl);
+		} else {
+			auto struct_decl = dynamic_cast<StructDeclaration*>(decl);
+			if (!struct_decl)
+			{
+				error(@2,"redefination of symbol ""%s"".");
+				//Recover : replace the defination with latest one.
+				decl = new StructDeclaration($2);
+				current_context->AddDeclaration(decl);
+			} else {
+				struct_decl->AddNode(specifier);
+			}
+		}
+		specifier->SetDecl(decl);*/
+	}
+	;
+
+StructBody
+	: "{" FieldDeclarationList "}"
+	{
+		$$ = $2;
+		context.pop_context();
+	}
+	;
+
+RecordKeyword
+	: STRUCT
+	{
+		$$ = $1;
+	}
+	| UNION
+	{
+		$$ = $1;
+	}
+	;
+
+EnumSpecifier
+	: ENUM Identifier LBRACE EnumeratorList RBRACE
+	{
+		$$ = nullptr;
+		//$$ = new EnumSpecifier($2,$4);
+	}
+	| ENUM Identifier LBRACE EnumeratorList COMMA RBRACE
+	{
+		$$ = nullptr;
+		//$$ = new EnumSpecifier($2,$4);
+	}
+	| ENUM LBRACE EnumeratorList RBRACE
+	{
+		$$ = nullptr;
+		//$$ = new EnumSpecifier($3);
+	}
+	| ENUM LBRACE EnumeratorList COMMA RBRACE
+	{
+		$$ = nullptr;
+		//$$ = new EnumSpecifier($3);
+	}
+	| ENUM Identifier
+	{
+		$$ = nullptr;
+		//$$ = new EnumSpecifier($2);
+	}
+	;
+
+EnumeratorList
+	: EnumeratorList COMMA Enumerator
+	{
+		$$ = $1;
+		$$->push_back($3);
+	}
+	| Enumerator
+	{
+		$$ = new std::list<Enumerator*>();
+		$$->push_back($1);
+	}
+	;
+
+Enumerator
+	: Identifier
+	{
+		$$ = new Enumerator($1);
+		$$->SetLocation(@$);
+	}
+	| Identifier ASSIGN ConstantExpr
+	{
+		$$ = new Enumerator($1,$3);
+		$$->SetLocation(@$);
+	}
+	;
+
+FieldDeclarationList
+	: %empty
+	{
+		$$ = new StructBody();
+		context.push_context($$);
+	}
+	| FieldDeclarationList FieldDeclaration
+	{
+		$$ = $1;
+		$$->Children().push_back($2);
+		$2->SetParent($$);
+	}
+	;
+
+FieldDeclaration
+	: QualifiedTypeSpecifier FieldDeclaratorList SEMICOLON
+	{
+		auto compound_decl = new FieldDeclStmt($1,$2);
+		compound_decl -> SetLocation(@$);
+		for (auto declarator : compound_decl->DeclaratorList())
+		{
+			auto decl = new FieldDeclaration($1->RepresentType(),declarator);
+			decl -> SetSourceNode(compound_decl);
+			context.current_context()->add(decl);
+			// Handel redefination
+		}
+		$$ = compound_decl;
+	}
+	| QualifiedTypeSpecifier SEMICOLON
+	{
+		auto empty_list = new std::list<Declarator*>;
+		auto compound_decl = new FieldDeclStmt($1,empty_list);
+		compound_decl -> SetLocation(@$);
+		$$ = compound_decl;
+	}
+	;
+
+FieldDeclaratorList
+	: FieldDeclaratorList COMMA FieldDeclarator
+	{
+		$$ = $1;
+		$$->push_back($3);
+	}
+	| FieldDeclarator
+	{
+		$$ = new std::list<Declarator*>();
+		$$->push_back($1);
+	}
+	;
+
+FieldDeclarator
+	: Declarator COLON ConstantExpr
+	{
+		$$ = new FieldDeclarator($1,$3);
+	}
+	| COLON ConstantExpr
+	{
+		$$ = new FieldDeclarator(nullptr,$2);
+	}
+	| Declarator
+	{
+		$$ = new FieldDeclarator($1);
+	}
+	;
+
+Identifier
+	: NewIdentifier
+	{
+		$$ = $1;
+	}
+	| ObjectIdentifier
+	{
+		$$ = $1;
+	}
+	;
+
+PrimaryExpr
+	: INT_LITERAL
+	{
+		$$ = $1;
+		$$->SetLocation(@$);
+	}
+	| STRING_LITERAL
+	{
+		$$ = $1;
+		$$->SetLocation(@$);
+	}
+	| FLOAT_LITERAL
+	{
+		$$ = $1;
+		$$->SetLocation(@$);
+	}
+	| Identifier
+	{
+		$$ = DeclRefExpr::MakeDeclRefExpr(context.current_context(),context.type_context,$1);
+		$$->SetLocation(@$);
+	}
+	| LPAREN Expr RPAREN
+	{
+		$$ = new ParenExpr($2);
+		$$->SetLocation(@$);
+	}
+	;
+
+PosfixExpr
+	: PrimaryExpr
+	{
+		$$ = $1;
+	}
+	| PosfixExpr ADDADD
+	{
+		$$ = PosfixExpr::MakePosfixExpr(OP_POSFIX_ADDADD,$1);
+		$$->SetLocation(@$);
+	}
+	| PosfixExpr SUBSUB
+	{
+		$$ = PosfixExpr::MakePosfixExpr(OP_POSFIX_SUBSUB,$1);
+		$$->SetLocation(@$);
+	}
+	| PosfixExpr "[" Expr "]"
+	{
+		$$ = IndexExpr::MakeIndexExpr($1,$3);
+		$$->SetLocation(@$);
+	}
+	| PosfixExpr LPAREN ArgumentList RPAREN
+	{
+		$$ = CallExpr::MakeCallExpr($1,$3);
+		$$->SetLocation(@$);
+	}
+	| PosfixExpr LPAREN RPAREN
+	{
+		auto empty_list = new std::list<AST::Expr*>();
+		$$ = CallExpr::MakeCallExpr($1,empty_list);
+		$$->SetLocation(@$);
+	}
+	| PosfixExpr DOT Identifier
+	{
+		$$ = MemberExpr::MakeMemberExpr($1,$3,OP_DOT);
+		$$->SetLocation(@$);
+	}
+	| PosfixExpr ARROW Identifier
+	{
+		$$ = MemberExpr::MakeMemberExpr($1,$3,OP_ARROW);
+		$$->SetLocation(@$);
+	}
+	;
+
+UnaryExpr
+	: PosfixExpr
+	{
+		$$ = $1;
+	}
+	| "*" CastExpr
+	{
+		$$ = DereferenceExpr::MakeDereferenceExpr($2);
+		$$->SetLocation(@$);
+	}
+	| "&" CastExpr %prec ADDRESS
+	{
+		$$ = AddressOfExpr::MakeAddressOfExpr($2);
+		$$->SetLocation(@$);
+	}
+	| ADDADD UnaryExpr
+	{
+		$$ = UnaryExpr::MakeUnaryExpr($1,$2);
+		$$->SetLocation(@$);
+	}
+	| SUBSUB UnaryExpr
+	{
+		$$ = UnaryExpr::MakeUnaryExpr($1,$2);
+		$$->SetLocation(@$);
+	}
+	| UnaryOperator CastExpr
+	{
+		$$ = UnaryExpr::MakeUnaryExpr($1,$2);
+		$$->SetLocation(@$);
+	}
+	| SIZEOF UnaryExpr
+	{
+		$$ = new SizeofExpr($2);
+		$$->SetLocation(@$);
+	}
+	| SIZEOF LPAREN TypeExpr RPAREN
+	{
+		$$ = new SizeofTypeExpr($3);
+		$$->SetLocation(@$);
+	}
+	;
+
+UnaryOperator
+	: ADD
+	{
+		$$ = $1;
+	}
+	| SUB
+	{
+		$$ = OP_NEG;
+	}
+	| REVERSE
+	{
+		$$ = $1;
+	}
+	| NOT
+	{
+		$$ = $1;
+	}
+	;
+
+CastExpr
+	: UnaryExpr
+	{
+		$$ = $1;
+	}
+	| CAST LSS TypeExpr GTR LPAREN Expr RPAREN
+	{
+		$$ = new ExplicitCastExpr($3,$6);
+		$$->SetLocation(@$);
+	}
+	| LPAREN TypeExpr RPAREN CastExpr
+	{
+		$$ = new ExplicitCastExpr($2,$4);
+		$$->SetLocation(@$);
+	}
+	;
+
+ArithmeticExpr
+	: CastExpr
+	{ 
+		$$ = $1;
+	}
+	| ArithmeticExpr ADD CastExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| ArithmeticExpr SUB CastExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| ArithmeticExpr MUL CastExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| ArithmeticExpr DIV CastExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| ArithmeticExpr MOD CastExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| ArithmeticExpr LSH CastExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| ArithmeticExpr RSH CastExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	;
+
+RelationExpr
+	: ArithmeticExpr
+	{
+		$$ = $1;
+	}
+	| RelationExpr LEQ ArithmeticExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| RelationExpr GEQ ArithmeticExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| RelationExpr GTR ArithmeticExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| RelationExpr LSS ArithmeticExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	;
+
+EqualityExpr
+	: RelationExpr
+	{
+		$$ = $1;
+	}
+	| EqualityExpr "==" RelationExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| EqualityExpr "!=" RelationExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	;
+
+
+BitwiseExpr
+	: EqualityExpr
+	{
+		$$ = $1;
+	}
+	| BitwiseExpr AND EqualityExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| BitwiseExpr OR  EqualityExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	| BitwiseExpr XOR EqualityExpr
+	{
+		$$ = ArithmeticExpr::MakeArithmeticExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	;
+
+LogicAndExpr
+	: BitwiseExpr
+	{
+		$$ = $1;
+	}
+	| LogicAndExpr "&&" BitwiseExpr
+	{
+		$$ = LogicExpr::MakeLogicExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	;
+
+LogicOrExpr
+	: LogicAndExpr
+	{
+		$$ = $1;
+	}
+	| LogicOrExpr "||" LogicAndExpr
+	{
+		$$ = LogicExpr::MakeLogicExpr($2,$1,$3);
+		$$->SetLocation(@$);
+	}
+	;
+
+ConditionalExpr
+	: LogicOrExpr
+	{
+		$$ = $1;
+	};
+
+AssignExpr
+	: ConditionalExpr
+	{
+		$$ = $1;
+	}
+	| UnaryExpr AssignOperator AssignExpr
+	{
+		//Unary op_enum here is because binary op_enum don't have L-value
+		$$ = AssignExpr::MakeAssignExpr($2,$1,$3);
+		$$ -> SetLocation(@$);
+		if ($$ -> ValueType() != LValue)
+		{
+			error (@1,"Semantic error : Assigned expression must have a L-Value.");
+		}
+	}
+	;
+
+AssignOperator
+	: ASSIGN
+	{ $$ = $1; }
+	| MUL_ASSIGN
+	{ $$ = $1; }
+	| DIV_ASSIGN
+	{ $$ = $1; }
+	| MOD_ASSIGN
+	{ $$ = $1; }
+	| ADD_ASSIGN
+	{ $$ = $1; }
+	| SUB_ASSIGN
+	{ $$ = $1; }
+	| LSH_ASSIGN
+	{ $$ = $1; }
+	| RSH_ASSIGN
+	{ $$ = $1; }
+	| AND_ASSIGN
+	{ $$ = $1; }
+	| XOR_ASSIGN
+	{ $$ = $1; }
+	| OR_ASSIGN
+	{ $$ = $1; }
+	;
+
+Expr
+	: AssignExpr
+	{
+		$$ = $1;
+	}
+	| Expr COMMA AssignExpr
+	{
+		// Comma expression is evil!!!
+		$$ = new CommaExpr($1,$3);
+	}
+	;
+
+ConstantExpr
+	: ConditionalExpr
+	{
+		// Constant expression don't support assign expression
+		// nessary for initializers and compile time constant
+		$$ = $1;
+		if (!$$ -> Evaluatable())
+		{
+			error (@$,"Semantic error : can not evalaute the expression at compile time.");
+		}
+	}
+
+ArgumentList
+	: ArgumentList "," AssignExpr
+	{
+		//cout << "ArgList : ArgList , AssignExpr" << endl;
+		$$ = $1;
+		$$->push_back($3);
+	}
+	| AssignExpr
+	{
+		//cout << "ArgList : AssignExpr" << endl;
+		$$ = new std::list<Expr*>();
+		$$->push_back($1);
+	}
+	;
+
+TypeExpr
+	: QualifiedTypeSpecifier AbstractDeclarator
+	{
+		$$ = new TypeExpr($1,$2);
+		$$->SetLocation(@$);
+	}
+	| QualifiedTypeSpecifier
+	{
+		$$ = new TypeExpr($1,nullptr);
+		$$->SetLocation(@$);
+	}
+	;
+
+Stmt
+	: ExprStmt
+	{
+		$$ = $1;
+	}
+	| DeclStmt
+	{
+		$$ = $1;
+	}
+	| IterationStmt
+	{
+		$$ = $1;
+	}
+	| SelectionStmt
+	{
+		$$ = $1;
+	}
+	| JumpStmt
+	{
+		$$ = $1;
+	}
+	| ReadStmt
+	{
+		$$ = $1;
+	}
+	| WriteStmt
+	{
+		$$ = $1;
+	}
+	| Label
+	{
+		$$ = $1;
+	}
+	| CompoundStmt
+	{
+		$$ = $1;
+	}
+	;
+
+CompoundStmt
+	: "{" StmtList "}"
+	{
+		$$ = $2;
+		$$->SetLocation(@$);
+		context.pop_context();
+	}
+	;
+
+StmtList
+	: StmtList Stmt
+	{
+		$$ = $1;
+		$$->Children().push_back($2);
+		$2->SetParent($$);
+	}
+	| %empty
+	{
+		$$ = new CompoundStmt();
+		context.push_context($$);
+	}
+	;
+
+ReadStmt
+	: "read" "(" Expr ")" ";"
+	{
+		$$ = new ReadStmt($3);
+		$$->SetLocation(@$);
+	}
+	;
+WriteStmt
+	: "write" "(" Expr ")" ";"
+	{
+		$$ = new WriteStmt($3);
+		$$->SetLocation(@$);
+	}
+	;
+
+ExprStmt
+	: Expr SEMICOLON
+	{
+		$$ = new ExprStmt($1);
+		$$->SetLocation(@$);
+	}
+	| SEMICOLON
+	{
+		$$ = new NullStmt();
+		$$->SetLocation(@$);
+	}
+	;
+
+DeclStmt
+	: ObjectDeclaration SEMICOLON
+	{
+		$$ = $1;
+		$$->SetLocation(@$);
+	}
+	| TypeDefination SEMICOLON
+	{
+		$$ = $1;
+		$$->SetLocation(@$);
+	}
+	;
+
+IterationStmt
+	: FOR "(" Stmt ExprStmt Expr ")" Stmt
+	{
+		//Stmt* post_action = new ExprStmt($5);
+		ExprStmt* expr_stmt = dynamic_cast<ExprStmt*>($4);
+		Expr* condition;
+		if (expr_stmt != nullptr)
+		{
+			condition = expr_stmt->Expression();
+
+			// delete this expr-stmt since we are only interested in the expr it self
+			expr_stmt->SetExpression(nullptr);
+			delete expr_stmt;
+		} else // it's a null-statement
+		{
+			condition = nullptr;
+		}
+
+		$$ = new ForStmt($3,condition,$5,$7);
+		$$->SetLocation(@$);
+	}
+	| FOR "(" Stmt ExprStmt ")" Stmt
+	{
+		ExprStmt* expr_stmt = dynamic_cast<ExprStmt*>($4);
+		Expr* condition;
+		if (expr_stmt != nullptr)
+		{
+			condition = expr_stmt->Expression();
+
+			// delete this expr-stmt since we are only interested in the expr it self
+			expr_stmt->SetExpression(nullptr);
+			delete expr_stmt;
+		} else // it's a null-statement
+		{
+			condition = nullptr;
+		}
+		$$ = new ForStmt($3,condition,nullptr,$6);
+		$$->SetLocation(@$);
+	}
+	| WHILE "(" Expr ")" Stmt
+	{
+		$$ = new WhileStmt($3,$5);
+		$$->SetLocation(@$);
+	}
+	| DO Stmt WHILE "(" Expr ")" ";"
+	{
+		$$ = new DoWhileStmt($2,$5);
+		$$->SetLocation(@$);
+	}
+	;
+
+SelectionStmt
+	: "if" "(" Expr ")" Stmt %prec NOELSE
+	{
+		$$ = new IfStmt($3,$5);
+		$$->SetLocation(@$);
+	}
+	| "if" "(" Expr ")" Stmt "else" Stmt
+	{
+		$$ = new IfStmt($3,$5,$7);
+		$$->SetLocation(@$);
+	}
+	| "switch" "(" Expr ")" Stmt
+	{
+		//$$ = new SwitchStmt($3);
+		//$$->SetLocation(@$);
+		$$ = new NullStmt();
+		//diag_context->NewDiagMsg(@$,UnsupportedFeature,"'switch statement'");
+	}
+	;
+
+JumpStmt
+	: CONTINUE SEMICOLON
+	{
+		$$ = new ContinueStmt();
+		$$->SetLocation(@$);
+	}
+	| BREAK SEMICOLON
+	{
+		$$ = new BreakStmt();
+		$$->SetLocation(@$);
+	}
+	| RETURN SEMICOLON
+	{
+		$$ = new ReturnStmt();
+		$$->SetLocation(@$);
+	}
+	| RETURN Expr SEMICOLON
+	{
+		$$ = new ReturnStmt($2);
+		$$->SetLocation(@$);
+	}
+	;
+
+Label
+	: CASE Expr COLON
+	{
+		$$ = new NullStmt();
+		$$->SetLocation(@$);
+	}
+	| DEFAULT COLON
+	{
+		$$ = new NullStmt();
+		$$->SetLocation(@$);
+	}
+	;
+
+%%
+
+// We have to implement the error function
+void C1::BisonParser::error(const C1::BisonParser::location_type &loc, const std::string &msg) {
+	std::cerr << "Error " << loc.begin.line << "." << loc.begin.column ;
+	std::cerr << " - "  << loc.end.line << "." << loc.end.column << " " ;
+	std::cerr << msg << std::endl;
+}
+
+// Now that we have the Parser declared, we can declare the Scanner and implement
+// the yylex function
+#include "cscanner.h"
+inline C1::BisonParser::symbol_type yylex(C1::AST::ASTContext&, C1::FlexScanner &scanner)
+{
+	return scanner.NextToken();
+}
+
 /*
-ComplexValue : NUMBER
-	  {
-		$$ = $1;
-	  }
-	| ArrayValue ENDSYM
-	  {
-		$$ = $1;
-	  }
-	;
-*/
-ArrayValue : BEGINSYM NUMBER
-	  {
-		Value *v;
-		NEW(v);
-		*v = $2;
-		$$.type = newArray($2.type,1);
-		$$.Array = newList();
-		addLast($$.Array,v);
-	  }
-	|
-	ArrayValue COMMA NUMBER
-	  {
-		Value *v;
-		NEW(v);
-		*v = $3;
-		$$ = $1;
-		$$.type->array->length++;
-		addLast($$.Array,v);
-	  }
-	;
-
-InitExp : 
-	  {
-		$$ = NULL;
-	  }
-	| ASGN Exp
-	  {
-		$$ = $2;
-		setLoc($$, (Loc)&(@$));
-	  }
-	| ASGN ArrayValue ENDSYM
-	  {
-		$$ = newNumber($2);
-		setLoc($$, (Loc)&(@$));
-	  }
-	;
-
-TypeDecl : TYPEDEFSYM Type DelicateID SEMICOLON
-	  {
-		$$ = $3;
-		$$->sym->kind = OBJ_type;
-		$$->kind = KTypedef;
-		printf("A new Type '%s' is Declared in %4d(%2d)\n",$$->sym->name, @$.first_line, @$.last_column);
-		setLoc($$, (Loc)&(@$));
-	  }
-	| TYPEDEFSYM error SEMICOLON
-	  {
-		printf("Error : Type Declare statement error @%4d(%2d)\n", @$.first_line, @$.last_column);
-		setLoc($$, (Loc)&(@$));
-	  }
-	;
-
-/*FuncDecl: Type UNREGID LPAREN 
-	  {
-		if(checkSym(symtab, $2)==NULL) 
-			getSym(symtab, $2);
-		else 	printf("Error : Re-defination of identifier '%s'.\n",$2);
-		PushTable(symtab);
-		paramcounter=0;
-		ReturnType = $1;
-//Important,the id of func must be decl in global symtab
-	  }
-	  ParamList RPAREN Statement
-	  {
-		PopTable(symtab);
-		$$ = newFunc(symtab,$2,$1,$5,$7);
-		$$->funcl->paramsize = paramcounter;
-		paramcounter=0;
-		setLoc($$, (Loc)&(@$));
-		ReturnType = Void;
-	  }
-	;*///old Version
-
-FuncDecl: Type DelicateID LPAREN 
-	  {
-		$2->sym->kind = OBJ_function;
-		$2->kind = KFunctionDecl;
-		printf("A new function %s has %d kind\n",lookup(symtab,$2->sym->name)->name,lookup(symtab,$2->sym->name)->kind);
-/*		if(checkSym(symtab, $2)==NULL) 
-			getSym(symtab, $2);
-		else 	printf("Error : Re-defination of identifier '%s'.\n",$2);*/
-		PushTable(symtab);
-		paramcounter=0;
-		ReturnType = $1;
-//Important,the id of func must be decl in global symtab
-	  }
-	  ParamList 
-	  {
-		$2 = newFunc(symtab,$2,$5,NULL);
-	  }
-	  RPAREN Statement
-	  {
-		PopTable(symtab);
-//		$$ = newFunc(symtab,$2,$5,$7);
-		$$ = $2;
-		$$->funcl->exec = $8;
-		$$->funcl->paramsize = paramcounter;
-//		printf("%s Kind : %d\n",$$->funcl->sym->name,lookup(symtab,"Breath")->kind);
-		paramcounter=0;
-		setLoc($$, (Loc)&(@$));
-		ReturnType = Void;
-	  }
-	;
-
-
-ParamList:
-	  {
-//		$$ = NULL;
-	    	$$ = newBlock();
-	    	$$->kind = KParamList;
-		setLoc($$, (Loc)&(@$));
-//		printf("Add to List %x\n",(int)($$->block->stmts));
-//	    	addLast($$->block->stmts,newVar(symtab,$2,$1));
-	  }
-	| Type DelicateID
-	  {
-	    	$$ = newBlock();
-	    	$$->kind = KParamList;
-		setLoc($$, (Loc)&(@$));
-		addLast($$->block->stmts,$2);
-		paramcounter-=$2->sym->type->size;
-		$2->kind = KVar;
-		$2->sym->kind = OBJ_var;
-		$2->sym->addr = paramcounter;
-//		addLast($$->block->stmts,newVar(symtab,$2,$1));
-	  }
-	| ParamList COMMA Type DelicateID
-	  {
-	    	$$ = $1;
-		if (!$$) {
-			printf("Error : Expect for Type bufore ','.\n");
-	    		$$ = newBlock();
-	    		$$->kind = KParamList;
-			setLoc($$, (Loc)&(@$));
-		}
-		addLast($$->block->stmts,$4);
-		paramcounter-=$4->sym->type->size;
-		$4->kind = KVar;
-		$4->sym->kind = OBJ_var;
-		$4->sym->addr=paramcounter;
-//	    	addLast($$->block->stmts,newVar(symtab,$4,$3));
-	  }
-	;
-
-Main	: BASETYPE MAINSYM LPAREN RPAREN
-	  {
-		$2 = newSym(symtab,"main",$1);
-		$2->sym->kind = OBJ_function;
-		$2->kind = KFunctionDecl;
-		PushTable(symtab);
-		paramcounter=0;
-		ReturnType = $1;
-	  }
-	  Statement
- 	  {
-		PopTable(symtab);
-		$$ = newFunc(symtab,$2,NULL,$6);
-		$$->funcl->paramsize = paramcounter;
-		paramcounter=0;
-		ReturnType = Void;
-		setLoc($$, (Loc)&(@$));
-	  }
-	;
-
-Statement: SEMICOLON
-	  {
-		printf("Empty Statement!\n");
-		$$ = NULL;
-	  }
-	| Exp SEMICOLON
-	  {
-		$$ = newExpStmt($1);
-		setLoc($$, (Loc)&(@$));
-	  }
-	| FORSYM
-	  {
-		PushTable(symtab);
-	  }
-	  LPAREN Statement Exp SEMICOLON Exp RPAREN Statement
-	  {
-		PopTable(symtab);
-		if ($4->kind!=KExpStmt&&$4->kind!=KVar)
-		{
-			printf("Error : For statement could not contain a statement in the location of initelize expression.\n");
-		}
-		$$ = newForStmt($4,$5,newExpStmt($7),$9);
-		setLoc($$, (Loc)&(@$));
-	  }
-	| WHILESYM LPAREN Exp RPAREN Statement
-	  {
-		$$ = newWhileStmt($3,$5);
-		setLoc($$, (Loc)&(@$));
-	  }
-	| BREAKSYM SEMICOLON
-	  {
-		$$ = newBreakStmt();
-		setLoc($$, (Loc)&(@$));
-	  }
-	| RETURNSYM SEMICOLON
-	  {
-		$$ = newReturnStmt(NULL,ReturnAddr,Void);
-		setLoc($$, (Loc)&(@$));
-	  }
-	| RETURNSYM Exp SEMICOLON 
-	  {
-		$$ = newReturnStmt($2,paramcounter,ReturnType);
-		setLoc($$, (Loc)&(@$));
-	  }
-	| IFSYM LPAREN Exp RPAREN Statement ELSESYM Statement %prec ELSESYM
-	  {
-		$$ = newIfStmt($3,$5,$7);
-		setLoc($$, (Loc)&(@$));
-	  }
-	| IFSYM LPAREN Exp RPAREN Statement %prec NOELSE
-	  {
-		$$ = newIfStmt($3,$5,NULL);
-		setLoc($$, (Loc)&(@$));
-	  }
-	| BEGINSYM
-	  {
-		PushTable(symtab);
-	  }
-	  MulStatement ENDSYM
-	  {
-		PopTable(symtab);
-		$$ = $3;
-		setLoc($$, (Loc)&(@$));
-	  }
-	| VarDecl SEMICOLON
-	  {
-		$$ = $1;
-		setLoc($$, (Loc)&(@$));
-	  }
-	| READSYM LPAREN Exp RPAREN SEMICOLON
-	  {
-		$$ = newPrefixExp(OP_READ,$3);
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| WRITESYM LPAREN Exp RPAREN SEMICOLON
-	  {
-		$$ = newPrefixExp(OP_WRITE,$3);
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| error
-	  {
-	    	printf("Stmt Error @ : %4d(%2d)\n", @$.first_line, @$.last_column);		
-	  }
-	;
-
-MulStatement:
-	  {
-	    	$$ = newBlock();
-	    	$$->kind = KMulStmts;
-		setLoc($$, (Loc)&(@$));
-	  }
-	| MulStatement Statement
-	  {
-		$$ = $1;
-		addLast($$->block->stmts,$2);
-	    	debug("Statement ;\n");
-	  }
-	;
-
-ArgList :
-	  {
-		printf("ArgList => /* Nothing */!\n");
-//	    	$$ = NULL;
-	    	$$ = newBlock();
-	    	$$->kind = KArgList;
-		Pitr = newListItr(FunctionCallCache->declaration->funcl->plist->block->stmts, 0);
-	  }
-	| Exp
-	  {
-		debug("ArgList => Exp\n");
-//		printf("FunctionCallCache : %x\n",FunctionCallCache->declaration->kind);
-		Pitr = newListItr(FunctionCallCache->declaration->funcl->plist->block->stmts, 0);
-//		debug("ArgList step2!\n");
-	    	$$ = newBlock();
-	    	$$->kind = KArgList;
-
-		ASTNode param;
-		if (!hasNext(Pitr))
-		{
-			printf("Error : There is too many arguments for function %s.\n",FunctionCallCache->name);
-			debug("ArgList => Exp Error\n");
-		}
-		else
-		{
-			param = (ASTNode)nextItem(Pitr);
-			$1 = newCast($1,getType(param));
-	/*		if (TypeCheck(OP_ASGN,getType(param),getType($1))->kind!=getType($1)->kind)
-				$1 = newPrefixExp(OP_CAST,$1);*/
-			addFirst($$->block->stmts,$1);
-			setLoc($$, (Loc)&(@$));
-			debug("ArgList => Exp Finish\n");
-		}
-	  }
-	|
-	ArgList COMMA Exp
-	  {
-		debug("ArgList =>ArgList , Exp\n");
-		$$ = $1;
-		if (!$$) {
-			printf("Error : Expect for Type bufore ','.\n");
-	    		$$ = newBlock();
-	    		$$->kind = KArgList;
-		}
-
-		ASTNode param;
-		if (hasNext(Pitr))
-		{ 
-			param = (ASTNode)nextItem(Pitr);
-			$3 = newCast($3,getType(param));
-			addFirst($$->block->stmts,$3);
-		    	debug("ArgList ,\n");		
-		}
-		else	printf("Error : There is too many arguments for function %s.\n",FunctionCallCache->name);
-	  }
-	;
-
-Exp     : NUMBER
-	  {
-	    	debug("exp => NUMBER\n");
-	    	$$ = newNumber($1);
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| AdrExp// %prec REFENCE
-	  {	// %prec REFENCE
-	    	debug("exp => AdrExp\n");
-	    	$$ = newPrefixExp(OP_REF, $1); 
-		$$->kind = KAdrExp;
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| AND AdrExp %prec ADDRESS
-	  {
-	    debug("exp => & AdrExp\n");
-	    $$ = newPrefixExp(OP_ADDRESS, $2); 
-	    setLoc($$, (Loc)&(@$));
-	  } 
-	| FUNCTIONID 
-	  {
-		debug("Exp => Function (Start)\n");
-		FunctionCallCache = lookup(symtab,$1);
-	  }
-	  LPAREN ArgList RPAREN
-	  {
-		debug("exp => ID (ArgList)\n");
-//		$$ = newName(symtab, $1);
-//	    	$$ = newRef(symtab, $1);
-		if (hasNext(Pitr)) printf("Error : There is too few arguments for function %s.\n",$1);
-		$$ = newFunCall(symtab, $1, $4);
-//	    	debug("CallFunction\n");
-		setLoc($$, (Loc)&(@$));
-	  }
-        | BITNOT Exp
-	  {
-	    debug("exp => ~ exp\n");
-	    $$ = newPrefixExp($1, $2); 
-	    setLoc($$, (Loc)&(@$));
-	  }
-        | NOT Exp
-	  {
-	    debug("exp => ! exp\n");
-	    $$ = newPrefixExp($1, $2); 
-	    setLoc($$, (Loc)&(@$));
-	  }
-	| SIZEOF Exp
- 	  {
-	    debug("exp => sizeof exp\n");
-	    $$ = newPrefixExp($1, $2); 
-	    setLoc($$, (Loc)&(@$));
-	  }
-       | MINUS Exp %prec NEG
-	  {
-	    debug("exp => - exp\n");
-	    $$ = newPrefixExp(OP_NEG, $2); 
-	    setLoc($$, (Loc)&(@$));
-	  }
-	| AdrExp ASGN Exp %prec ASGN
-	  {
-	    	debug("AsgnExp => AExp ASGN exp\n");
-	    	$$ = newAssignment($2, $1, $3);
-	    	setLoc($$, (Loc)&(@$));
-	  }
- 	| Exp EQL Exp
-	  {
-	    	debug("exp => exp == exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp NEQ Exp
-	  {
-	    	debug("exp => exp != exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp LEQ Exp
-	  {
-	    	debug("exp => exp <= exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp GTR Exp
-	  {
-	    	debug("exp => exp > exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp LSS Exp
-	  {
-	    	debug("exp => exp < exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp GEQ Exp
-	  {
-	    	debug("exp => exp >= exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp PLUS Exp
-	  {
-	    	debug("exp => exp + exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp MINUS Exp
-	  {
-	    	debug("exp => exp - exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp MULT Exp
-	  {
-	    	debug("exp => exp * exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp DIV Exp
-	  {
-	    	debug("exp => exp / exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp MOD Exp
-	  {
-	    	debug("exp => exp % exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp ANDAND Exp
-	  {
-	    	debug("exp => exp && exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp OROR Exp
-	  {
-	    	debug("exp => exp || exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp AND Exp
-	  {
-	    	debug("exp => exp & exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp OR Exp
-	  {
-	    	debug("exp => exp | exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp XOR Exp
-	  {
-	    	debug("exp => exp ^ exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp LSH Exp
-	  {
-	    	debug("exp => exp << exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp RSH Exp
-	  {
-	    	debug("exp => exp >> exp\n");
-	    	$$ = newInfixExp($2, $1, $3); 
-	    	setLoc($$, (Loc)&(@$));
-	  }
-        | LPAREN Exp RPAREN %prec GROUP
-	  {
-	    debug("exp => ( exp )\n");
-	    $$ = newParenExp($2);
-	    setLoc($$, (Loc)&(@$));
-	  }
-        ;
-
-AdrExp:	VARID
-	  {
-	    	debug("AExp => VARID\n");
-	    	$$ = newRef(symtab, $1);
-//		$$ = newName(symtab, $1);
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| UNREGID
-	  {
-	    	debug("AExp => UNREGID\n");
-	    	$$ = newRef(symtab, $1);
-//		$$ = newName(symtab, $1);
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| MULT AdrExp %prec DEREFENCE
-	  {
-		//Use this produce equltion to provide shift-reduce conflicts like *p=3 to reduce into *(p=3);
-	    	debug("AdrExp => * AdrExp\n");
-	    	$$ = newPrefixExp(OP_DEREF, $2); 
-		$$->kind = KDeRef;
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| MULT Exp %prec DEREFENCE
-	  {
-	    	debug("AdrExp => * Exp\n");
-	    	$$ = newPrefixExp(OP_DEREF, $2); 
-		$$->kind = KDeRef;
-	    	setLoc($$, (Loc)&(@$));
-	  }
-	| Exp LBRACK Exp RBRACK %prec INDEX
-	  {
-	    	debug("AdrExp => Exp [ Exp ]\n");
-	    	$$ = newInfixExp(OP_INDEX, $1, $3); 
-		$$->kind = KIndex;
-	    	setLoc($$, (Loc)&(@$));
-	  }	
-	| LPAREN AdrExp RPAREN
-	  {
-		$$ = $2;
-	  }
-	;
-
-
-%%
-
 int yyerror(char *message)
 {
 	printf("%s\n",message);
 	return 0;
 }
+
+ASTree parse()
+{
+	ASTree tree = newAST();
+	ast = tree;
+	yyparse();
+	return tree;
+} */

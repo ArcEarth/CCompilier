@@ -2,250 +2,207 @@
  * expr.lex : Scanner for a simple
  *            expression parser.
  */
-
+%top{
+#include <cstdint>
+}
 %{
-#include "common.h"
-#include "C1.tab.h"
-#include "string.h"
-#include "stdlib.h"
-int yycolumn = 1;
-extern Type Int,Float,Char,Bool,Void,ConstBool,ConstInt,ConstFloat,ConstChar,String,ConstString;
-extern Table symtab;
-#define STATICSIZE 2048
-memunit StaticMemery[ STATICSIZE ];
-int smp=0;
-Loc PositionPointer = (Loc)&yylloc;
-#define NUMAXLEN 10
-#define YY_USER_ACTION yylloc.first_line = yylloc.last_line = yylineno; \
-    yylloc.first_column = yycolumn; yylloc.last_column = yycolumn+yyleng-1; \
-    yycolumn += yyleng;
+#include "cscanner.h"
+//using namespace std;
+using namespace C1;
+using namespace C1::AST;
 %}
 
-%option yylineno
-%option noyywrap
+%option noyywrap c++ yyclass="FlexScanner" yylineno
 
 %x COMMENT
-%x LINECOMMENT
 
-identifier [A-Za-z_][A-Za-z_0-9]*
-character  \'([^'\n])+\'
-bad_chr    \'([^'\n])
-string	   \"([^"\n])+\"
-bad_string \"([^"\n])+
+digit				[0-9]+
+octal				0[0-7]+	
+hex					0[Xx][0-9A-Fa-f]+
+unsigned			{digit}[uU]
+decimal				[+-]?({digit})?"."{digit}
+sci_float			{decimal}([eE]([+-])?{digit})?
+ident				[A-Za-z_][A-Za-z_0-9]*
+line_comment		"//"[^\n]+
+char_literal		"'"([^"'"\n])*"'"
+string_literal		"\""([^"'"\n])*"\""
+bad_char_literal	"\""([^"'"\n])*\n
+bad_string_literal	"'"([^"'"\n])*\n
+
+
+%{
+#define YY_USER_ACTION loc.columns (yyleng);
+%}
+
+%{
+typedef C1::BisonParser::token token;
+%} 
 
 %%
-"//"                {
-			BEGIN(LINECOMMENT);
-		    }
-<LINECOMMENT>[^\n]+ ;
-<LINECOMMENT><<EOF>>    printf("Error : File end during comments.\n");
-<LINECOMMENT>\n     {
-			BEGIN(INITIAL);
-		    }
+%{
+	//evert time calls yylex()
+	loc.step ();
+%}
+"/*"    		{
+					BEGIN(COMMENT);
+					yycomment = "";
+				}
+<COMMENT>"*/" 	{
+					BEGIN(INITIAL);
+		    	}
+<COMMENT>[\n]	{
+					loc.lines ();
+					yycomment += yytext;
+				}
+<COMMENT>[^*/\n]+ {
+					yycomment += yytext;
+				}
+<COMMENT>[*/] {
+					yycomment += yytext;
+				}
+<COMMENT><<EOF>> {
+				    printf("Error : File end during comments.\n");
+				    current_symbol.move(C1::BisonParser::make_END(loc));
+				    return token::END;	
+				}
+{line_comment} 	{
+					loc.lines ();
+					loc.step (); 
+				}
+<<EOF>> 		{
+				    current_symbol.move(C1::BisonParser::make_END(loc));
+				    return token::END;	
+				}
+[\n] 			{ 
+					loc.lines ();
+					loc.step (); 
+				}
+[\t ]*     		{ 
+					loc.step (); 
+				}
 
-"/*"                {
-			BEGIN(COMMENT);
-		    }
-<COMMENT>[^*/]+	    ;
-<COMMENT><<EOF>>    printf("Error : File end during comments.\n");
-<COMMENT>"*/"       {
-			BEGIN(INITIAL);
-		    }
-<COMMENT>[*/]	    ;
+"auto"			{ current_symbol.move(C1::BisonParser::make_AUTO(SCS_AUTO,loc)); return token::AUTO;  }
+"break"			{ current_symbol.move(C1::BisonParser::make_BREAK(loc)); return token::BREAK;  }
+"case"			{ current_symbol.move(C1::BisonParser::make_CASE(loc)); return token::CASE;  }
+"char"			{ current_symbol.move(C1::BisonParser::make_CHAR(loc)); return token::CHAR;  }
+"continue"		{ current_symbol.move(C1::BisonParser::make_CONTINUE(loc)); return token::CONTINUE;  }
+"default"		{ current_symbol.move(C1::BisonParser::make_DEFAULT(loc)); return token::DEFAULT;  }
+"do"			{ current_symbol.move(C1::BisonParser::make_DO(loc)); return token::DO;  }
+"double"		{ current_symbol.move(C1::BisonParser::make_DOUBLE(loc)); return token::DOUBLE;  }
+"else"			{ current_symbol.move(C1::BisonParser::make_ELSE(loc)); return token::ELSE;  }
+"enum"			{ current_symbol.move(C1::BisonParser::make_ENUM(ENUM,loc)); return token::ENUM;  }
+"extern"		{ current_symbol.move(C1::BisonParser::make_EXTERN(SCS_EXTERN,loc)); return token::EXTERN;  }
+"float"			{ current_symbol.move(C1::BisonParser::make_FLOAT(loc)); return token::FLOAT;  }
+"for"			{ current_symbol.move(C1::BisonParser::make_FOR(loc)); return token::FOR;  }
+"goto"			{ current_symbol.move(C1::BisonParser::make_GOTO(loc)); return token::GOTO;  }
+"if"			{ current_symbol.move(C1::BisonParser::make_IF(loc)); return token::IF;  }
+"int"			{ current_symbol.move(C1::BisonParser::make_INT(loc)); return token::INT;  }
+"long"			{ current_symbol.move(C1::BisonParser::make_LONG(loc)); return token::LONG;  }
+"read"			{ current_symbol.move(C1::BisonParser::make_READ(loc)); return token::READ;  }
+"register"		{ current_symbol.move(C1::BisonParser::make_REGISTER(SCS_REGISTER,loc)); return token::REGISTER;  }
+"return"		{ current_symbol.move(C1::BisonParser::make_RETURN(loc)); return token::RETURN;  }
+"short"			{ current_symbol.move(C1::BisonParser::make_SHORT(loc)); return token::SHORT;  }
+"signed"		{ current_symbol.move(C1::BisonParser::make_SIGNED(loc)); return token::SIGNED;  }
+"sizeof"		{ current_symbol.move(C1::BisonParser::make_SIZEOF(OP_SIZEOF,loc)); return token::SIZEOF;  }
+"static"		{ current_symbol.move(C1::BisonParser::make_STATIC(SCS_STATIC,loc)); return token::STATIC;  }
+"struct"		{ current_symbol.move(C1::BisonParser::make_STRUCT(C1::STRUCT,loc)); return token::STRUCT;  }
+"switch"		{ current_symbol.move(C1::BisonParser::make_SWITCH(loc)); return token::SWITCH;  }
+"typedef"		{ current_symbol.move(C1::BisonParser::make_TYPEDEF(loc)); return token::TYPEDEF;  }
+"union"			{ current_symbol.move(C1::BisonParser::make_UNION(UNION,loc)); return token::UNION;  }
+"unsigned"		{ current_symbol.move(C1::BisonParser::make_UNSIGNED(loc)); return token::UNSIGNED;  }
+"void"			{ current_symbol.move(C1::BisonParser::make_VOID(loc)); return token::VOID;  }
+"while"			{ current_symbol.move(C1::BisonParser::make_WHILE(loc)); return token::WHILE;  }
+"write"			{ current_symbol.move(C1::BisonParser::make_WRITE(loc)); return token::WRITE;  }
+"restrict"		{ current_symbol.move(C1::BisonParser::make_RESTRICT(RESTRICT,loc)); return token::RESTRICT; }
+"const"			{ current_symbol.move(C1::BisonParser::make_CONST(CONST,loc)); return token::CONST; }
+"volatile"		{ current_symbol.move(C1::BisonParser::make_VOLATILE(VOLATILE,loc)); return token::VOLATILE; }
+{sci_float}		{
+					auto val = strtof(yytext,NULL);
+					Expr* node = new AST::FloatLiteral(pContext->type_context,yytext,val);
+					current_symbol.move(C1::BisonParser::make_FLOAT_LITERAL(node,loc)); return token::INT_LITERAL; 
+				}
+{octal} 		{ 
+					auto val = strtol(yytext,NULL,8);
+					Expr* node = new AST::IntegerLiteral(pContext->type_context,yytext,val,8);
+					current_symbol.move(C1::BisonParser::make_INT_LITERAL(node,loc)); return token::INT_LITERAL; 
+				}
+{digit}    		{ 
+					auto val = strtol(yytext,NULL,10);
+					Expr* node = new AST::IntegerLiteral(pContext->type_context,yytext,val,10);
+					current_symbol.move(C1::BisonParser::make_INT_LITERAL(node,loc)); return token::INT_LITERAL; 
+				}
+{hex}		   	{ 
+					auto val = strtol(yytext,NULL,16);
+					Expr* node = new AST::IntegerLiteral(pContext->type_context,yytext,val,16);
+					current_symbol.move(C1::BisonParser::make_INT_LITERAL(node,loc)); return token::INT_LITERAL; 
+				}
+{string_literal} 	{
+					Expr* node = new AST::StringLiteral(pContext->type_context,yytext);
+					current_symbol.move(C1::BisonParser::make_STRING_LITERAL(node,loc));
+					return token::STRING_LITERAL; 
+				}
+{ident}	 		{ 
+					std::string val(yytext);
+					auto decl = pContext->current_context()->lookup(val);
+					if (decl){
+						if (dynamic_cast<const TypeDeclaration*>(decl)!=nullptr) {
+							current_symbol.move(C1::BisonParser::make_TypeIdentifier(yytext,loc));
+							return token::TypeIdentifier;
+						} else {
+							current_symbol.move(C1::BisonParser::make_ObjectIdentifier(yytext,loc));
+							return token::ObjectIdentifier;
+						}
+					} else
+					current_symbol.move(C1::BisonParser::make_NewIdentifier(yytext,loc));
+					return token::NewIdentifier; 
+				}
+"="		{ current_symbol.move(C1::BisonParser::make_ASSIGN(OP_ASSIGN,loc)); return token::ASSIGN;  }
+"<"		{ current_symbol.move(C1::BisonParser::make_LSS(OP_LSS,loc)); return token::LSS;  }
+"=="	{ current_symbol.move(C1::BisonParser::make_EQL(OP_EQL,loc)); return token::EQL;  }
+"<="	{ current_symbol.move(C1::BisonParser::make_LEQ(OP_LEQ,loc)); return token::LEQ;  }
+"!="	{ current_symbol.move(C1::BisonParser::make_NEQ(OP_NEQ,loc)); return token::NEQ; }
+">"		{ current_symbol.move(C1::BisonParser::make_GTR(OP_GTR,loc)); return token::GTR; }
+">="	{ current_symbol.move(C1::BisonParser::make_GEQ(OP_GEQ,loc)); return token::GEQ; }						
+"+"		{ current_symbol.move(C1::BisonParser::make_ADD(OP_ADD,loc)); return token::ADD;  }
+"-"		{ current_symbol.move(C1::BisonParser::make_SUB(OP_SUB,loc)); return token::SUB;  }
+"*"		{ current_symbol.move(C1::BisonParser::make_MUL(OP_MUL,loc)); return token::MUL;  }
+"/"		{ current_symbol.move(C1::BisonParser::make_DIV(OP_DIV,loc)); return token::DIV;  }
+"%"		{ current_symbol.move(C1::BisonParser::make_MOD(OP_MOD,loc)); return token::MOD;  }
+"."		{ current_symbol.move(C1::BisonParser::make_DOT(OP_DOT,loc)); return token::DOT;  }
+"->"	{ current_symbol.move(C1::BisonParser::make_ARROW(OP_ARROW,loc)); return token::ARROW;  }
+"&&"	{ current_symbol.move(C1::BisonParser::make_ANDAND(OP_ANDAND,loc)); return token::ANDAND;  }
+"||"	{ current_symbol.move(C1::BisonParser::make_OROR(OP_OROR,loc)); return token::OROR;  }
+"&"		{ current_symbol.move(C1::BisonParser::make_AND(OP_AND,loc)); return token::AND;  }
+"^"		{ current_symbol.move(C1::BisonParser::make_XOR(OP_XOR,loc)); return token::XOR;  }
+"|"		{ current_symbol.move(C1::BisonParser::make_OR(OP_OR,loc)); return token::OR;  }
+"<<"	{ current_symbol.move(C1::BisonParser::make_LSH(OP_LSH,loc)); return token::LSH;  }
+">>"	{ current_symbol.move(C1::BisonParser::make_RSH(OP_RSH,loc)); return token::RSH;  }
+"+=" 	{ current_symbol.move(C1::BisonParser::make_ADD_ASSIGN(OP_ADD_ASSIGN,loc)); return token::ADD_ASSIGN;  }
+"-=" 	{ current_symbol.move(C1::BisonParser::make_SUB_ASSIGN(OP_SUB_ASSIGN,loc)); return token::SUB_ASSIGN;  }
+"*=" 	{ current_symbol.move(C1::BisonParser::make_MUL_ASSIGN(OP_MUL_ASSIGN,loc)); return token::MUL_ASSIGN;  }
+"/=" 	{ current_symbol.move(C1::BisonParser::make_DIV_ASSIGN(OP_DIV_ASSIGN,loc)); return token::DIV_ASSIGN;  }
+"%=" 	{ current_symbol.move(C1::BisonParser::make_MOD_ASSIGN(OP_MOD_ASSIGN,loc)); return token::MOD_ASSIGN;  }
+"&=" 	{ current_symbol.move(C1::BisonParser::make_AND_ASSIGN(OP_AND_ASSIGN,loc)); return token::AND_ASSIGN;  }
+"|=" 	{ current_symbol.move(C1::BisonParser::make_OR_ASSIGN(OP_OR_ASSIGN,loc)); return token::OR_ASSIGN;  }
+"^=" 	{ current_symbol.move(C1::BisonParser::make_XOR_ASSIGN(OP_XOR_ASSIGN,loc)); return token::XOR_ASSIGN;  }
+"<<=" 	{ current_symbol.move(C1::BisonParser::make_LSH_ASSIGN(OP_LSH_ASSIGN,loc)); return token::LSH_ASSIGN;  } 
+">>=" 	{ current_symbol.move(C1::BisonParser::make_RSH_ASSIGN(OP_RSH_ASSIGN,loc)); return token::RSH_ASSIGN;  }
+"++" 	{ current_symbol.move(C1::BisonParser::make_ADDADD(OP_ADDADD,loc)); return token::ADDADD;  }
+"--" 	{ current_symbol.move(C1::BisonParser::make_SUBSUB(OP_SUBSUB,loc)); return token::SUBSUB;  }
 
-[\t ]*     //printf("%s",yytext);/* throw away whitespace */
-"{"	   return(BEGINSYM);
-"}"	   return(ENDSYM);
-"["	   return(LBRACK);
-"]"	   return(RBRACK);
-"const"	   return(CONSTSYM);
-"static"	   return(STATICSYM);
-"typedef"	   return(TYPEDEFSYM);
-"float"	   {yylval.tval = Float; return(BASETYPE);}
-"int"	   {yylval.tval = Int; return(BASETYPE);}
-"char"	   {yylval.tval = Char; return(BASETYPE);}
-"bool"	   {yylval.tval = Bool; return(BASETYPE);}
-"void"	   {yylval.tval = Void; return(BASETYPE);}
-"true"	   {
-	     yylval.val.type = ConstBool;
-	     yylval.val.Bool = 1;
-	     return(NUMBER);
-	   }
-"false"	   {
-	     yylval.val.type = ConstBool;
-	     yylval.val.Bool = 0;
-	     return(NUMBER);
-	   }
-"break"	   return(BREAKSYM);
-"return"   return(RETURNSYM);
-"main"	   return(MAINSYM);
-"if"	   return(IFSYM);
-"else"	   return(ELSESYM);
-"while"	   return(WHILESYM);
-"for"	   return(FORSYM);
-"read"	   return(READSYM);
-"write"	   return(WRITESYM);
-"sizeof"	   {yylval.ival = OP_SIZEOF; return(SIZEOF);}
-{identifier}	   {
-	     yylval.name = (char*)malloc(yyleng+1);
-             strncpy(yylval.name, yytext, yyleng);
-             yylval.name[yyleng]='\0';
-//		printf("ID:'%s',Length:%d\n",yytext,yyleng);
-	     Symbol sym = lookup(symtab, yylval.name);
-	     if (sym==NULL) return(UNREGID);
-/*	     sym = lookup(symtab, "factor");
-		if (sym==NULL) printf("'factor' is not regeisted!\n");
-	     	else printf("ID '%s' kind is %d\n",sym->name,sym->kind);
-	     sym = lookup(symtab, yylval.name);*/
-/*	     yylval.sym = sym;*/
-	     switch (sym->kind)
-	     {
-		case OBJ_type: return(TYPEID);
-		case OBJ_var: return(VARID);
-		case OBJ_function: return(FUNCTIONID);
-	     }
-	   }
-[0-9]+[eE]["+"|"-"]?[0-9]+	   {
-	     yylval.val.type = ConstFloat;
-	     yylval.val.Float = (float)atof(yytext);
-	     return(NUMBER);
-	   }
-[0-9]+"."[0-9]+	   {
-	     yylval.val.type = ConstFloat;
-	     yylval.val.Float = (float)atof(yytext);
-//	     printf("Float %f dectectived \n",yylval.val.Float);
-	     return(NUMBER);
-	   }
-{character}	   {
-	     yylval.val.type = ConstChar;
-	     yylval.val.Char = yytext[1];
-	     if (yytext[1]=='\\') {
-		switch (yytext[2])
-		{
-		case 'v':
-			yylval.val.Char = '\v';break;
-		case 'f':
-			yylval.val.Char = '\f';break;
-		case 'r':
-			yylval.val.Char = '\r';break;
-		case 't':
-			yylval.val.Char = '\t';break;
-		case 'n':
-	     		yylval.val.Char = '\n';break;
-		case 'b':
-	     		yylval.val.Char = '\b';break;
-		default :
-			break;
+"{"		{ current_symbol.move(C1::BisonParser::make_LBRACE(loc)); return token::LBRACE;  }
+"}"		{ current_symbol.move(C1::BisonParser::make_RBRACE(loc)); return token::RBRACE;  }
+"("		{ current_symbol.move(C1::BisonParser::make_LPAREN(loc)); return token::LPAREN;  }
+")"		{ current_symbol.move(C1::BisonParser::make_RPAREN(loc)); return token::RPAREN;  }
+"["		{ current_symbol.move(C1::BisonParser::make_LBRACKET(loc)); return token::LBRACKET;  }
+"]"		{ current_symbol.move(C1::BisonParser::make_RBRACKET(loc)); return token::RBRACKET;  }
+","		{ current_symbol.move(C1::BisonParser::make_COMMA(loc)); return token::COMMA;  }
+":"		{ current_symbol.move(C1::BisonParser::make_COLON(loc)); return token::COLON;  }
+";"		{ current_symbol.move(C1::BisonParser::make_SEMICOLON(loc)); return token::SEMICOLON;  }
+
+.		{ 
+			loc.step();
+			printf("Invaliad char.");
 		}
-	     }
-	     return(NUMBER);
-	   }
-{bad_chr}	   {
-	     printf("Error : Expect for ' .");
-	     yylval.val.type = ConstChar;
-	     yylval.val.Char = yytext[1];
-	     return(NUMBER);
-	   }
-{string}	   {
-	     int n=strlen(yytext)-2;
-	     char *buffer=(char *)(StaticMemery+smp);
-	     int i,m=0;
-	     for (i=1;i<=n;i++)
-	     {
-                if (yytext[i]!='\\') buffer[m++]=yytext[i];
-                else 
-                {
-                        i++;
-		        switch (yytext[i])
-		        {
-		        case 'v':
-			        buffer[m++] = '\v';break;
-		        case 'f':
-			        buffer[m++] = '\f';break;
-		        case 'r':
-			        buffer[m++] = '\r';break;
-		        case 't':
-			        buffer[m++] = '\t';break;
-		        case 'n':
-	             		buffer[m++] = '\n';break;
-		        case 'b':
-	             		buffer[m++] = '\b';break;
-		        default :
-			        break;
-		        }
-                }
-	     }//The cpmlpex string support (allowed character like \n)
-//	     strncpy(buffer,yytext+1,n);
-	     buffer[m]='\0';
-	     yylval.val.type = ConstString;
-	     yylval.val.Int = smp;
-	     smp+=m/4+1;
-//	     smp+=n+1;
-//	     if (smp%4) smp+=(4-smp%4);  //for the alline
-//	     printf("Warning : String supporting is not finished yet >_<, use this may cause some unwanted result.\n");
-	     return(NUMBER);
-	   }
-{bad_string}	   {
-	     yylval.val.type = ConstString;
-	     yylval.val.Int = (int)"";
-	     printf("Error : String with out "" end.\n");
-//	     printf("Warning : String supporting is not finished yet >_<, use this may cause some unwanted result.\n");
-	     return(NUMBER);
-	   }
-0[0-7]+	   {
-	     if (strlen(yytext)>NUMAXLEN*5/4+1) printf("Error : 31\n");
-//	     yylval.ival = strtol(yytext,NULL,8);
-	     yylval.val.type = ConstInt;
-	     yylval.val.Int = strtol(yytext,NULL,8);
-             return(NUMBER);
-           }
-0[xX][0-9A-Fa-f]+	   {
-	     if (strlen(yytext)>NUMAXLEN*5/8+2) printf("Error : 31\n");
-//	     yylval.ival = strtol(yytext,NULL,16);
-	     yylval.val.type = ConstInt;
-	     yylval.val.Int = strtol(yytext,NULL,16);
-             return(NUMBER);
-           }
-[0-9]+	   {
-	     if (strlen(yytext)>NUMAXLEN) printf("Error : 31\n");
-//	     yylval.ival = strtol(yytext,NULL,10);
-	     yylval.val.type = ConstInt;
-	     yylval.val.Int = strtol(yytext,NULL,10);
-             return(NUMBER);
-           }
-"<<"	   {yylval.ival = OP_LSH; return(LSH);}
-">>"	   {yylval.ival = OP_RSH; return(RSH);}
-"=="	   {yylval.ival = OP_EQL; return(EQL);}
-"<="	   {yylval.ival = OP_LEQ; return(LEQ);}
-"!="	   {yylval.ival = OP_NEQ; return(NEQ);}
-"<"	   {yylval.ival = OP_LSS; return(LSS);}
-">="	   {yylval.ival = OP_GEQ; return(GEQ);}
-">"	   {yylval.ival = OP_GTR; return(GTR);}
-"*"	   {yylval.ival = OP_MULT; return(MULT);}
-"/"	   {yylval.ival = OP_DIV; return(DIV);}
-"+"	   {yylval.ival = OP_PLUS; return(PLUS);}
-"-"	   {yylval.ival = OP_MINUS; return(MINUS);}
-"%"	   {yylval.ival = OP_MOD; return(MOD);}
-"="	   {yylval.ival = OP_ASGN; return(ASGN);}
-"&&"	   {yylval.ival = OP_ANDAND; return(ANDAND);}
-"||"	   {yylval.ival = OP_OROR; return(OROR);}
-"!"	   {yylval.ival = OP_NOT; return(NOT);}
-"~"	   {yylval.ival = OP_BITNOT; return(BITNOT);}
-"&"	   {yylval.ival = OP_AND; return(AND);}
-"|"	   {yylval.ival = OP_OR; return(OR);}
-"^"	   {yylval.ival = OP_XOR; return(XOR);}
-","	   {return(COMMA);}
-";"	   {return(SEMICOLON);}
-"("	   {return(LPAREN);}
-")"	   {return(RPAREN);}
-[\n]	   {
-//	     yyrow++;
-	     yycolumn = 1;
-//	     return(EOL);
-	   }
-.          {
-	     printf("%s Ilegle Character\n",yytext);
-	     return(EOL);
-	   }
 
 %%
