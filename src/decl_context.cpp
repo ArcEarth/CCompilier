@@ -29,6 +29,12 @@ C1::AST::DeclContext::InsertionResult C1::AST::DeclContext::add(Declaration* dec
 	return declaration->AddToContext(*this);
 }
 
+bool C1::AST::DeclContext::rename_decl(NamedDeclaration* decl)
+{
+	return false;
+}
+
+
 void C1::AST::DeclContext::force_add(NamedDeclaration* decl)
 {
 	m_ListView.push_back(decl);

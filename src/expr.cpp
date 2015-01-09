@@ -1519,6 +1519,22 @@ C1::AST::ConstantLiteral::ConstantLiteral(TypeContext* type_context, const std::
 {
 }
 
+C1::AST::BooleanLiteral::BooleanLiteral(TypeContext* type_context, const char* raw_str, bool value)
+	: ConstantLiteral(type_context, raw_str)
+{
+	m_Value.Bool = value;
+}
+
+C1::AST::QualType C1::AST::BooleanLiteral::ReturnType() const
+{
+	return MakeConst(m_TypeContext->Bool());
+}
+
+void C1::AST::BooleanLiteral::Generate(C1::PCode::CodeDome& dome)
+{
+	dome << gen(lit, 0, m_Value.Int);
+}
+
 C1::AST::IntegerLiteral::IntegerLiteral(TypeContext* type_context, const char* raw_str, int value, int dec)
 : ConstantLiteral(type_context, raw_str), m_decimal(dec)
 {

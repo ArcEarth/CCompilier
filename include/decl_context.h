@@ -103,6 +103,9 @@ namespace C1
 			// List interfaces
 			InsertionResult add(Declaration* declaration);
 
+			// Return if the rename operation succeed
+			bool rename_decl(NamedDeclaration* decl);
+
 			void force_add(NamedDeclaration* decl);
 			void force_add(Declaration* decl);
 			//InsertionResult add(NamedDeclaration* declaration, NameCollisonPolicy);

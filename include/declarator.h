@@ -62,16 +62,17 @@ namespace C1
 			std::string m_Name;
 		};
 
-		class PointerDeclarator : public Declarator
+		class PrefixDeclarator : public Declarator
 		{
 		public:
-			PointerDeclarator(int qualfier_mask, Declarator* base);
+			PrefixDeclarator(OperatorsEnum prefix, int qualfier_mask, Declarator* base);
 			int QualifierMask() const { return m_Qualifiers; }
 			void Dump(std::ostream&) const;
 
 			virtual QualType DecorateType(QualType base_type);
 
 		protected:
+			OperatorsEnum m_Operator;
 			int m_Qualifiers;
 		};
 
@@ -109,14 +110,17 @@ namespace C1
 		class FunctionalDeclarator : public Declarator
 		{
 		public:
-			FunctionalDeclarator(Declarator* base, ParameterList* param_list);
+			FunctionalDeclarator(Declarator* base, ParameterList* param_list, int qualfier_mask);
 			const ParameterList& Parameters() const { return *m_Parameters; }
 			ParameterList& Parameters() { return *m_Parameters; }
+			int QualifierMask() const { return m_Qualifiers; }
+
 			void Dump(std::ostream&) const;
 
 			virtual QualType DecorateType(QualType base_type);
 
 		protected:
+			int m_Qualifiers;
 			std::unique_ptr<ParameterList> m_Parameters;
 		};
 

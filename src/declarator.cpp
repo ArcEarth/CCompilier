@@ -111,17 +111,17 @@ C1::AST::QualType C1::AST::IdentifierDeclarator::DecorateType(QualType base_type
 	return base_type;
 }
 
-C1::AST::PointerDeclarator::PointerDeclarator(int qualfier_mask, Declarator* base)
-: Declarator(base), m_Qualifiers(qualfier_mask)
+C1::AST::PrefixDeclarator::PrefixDeclarator(OperatorsEnum prefix, int qualfier_mask, Declarator* base)
+: Declarator(base), m_Operator(prefix), m_Qualifiers(qualfier_mask)
 {
 }
 
-void C1::AST::PointerDeclarator::Dump(std::ostream& os) const
+void C1::AST::PrefixDeclarator::Dump(std::ostream& os) const
 {
-	os << "*" << QualType::QulifierMaskToString(m_Qualifiers) << *m_Base;
+	os << m_Operator << QualType::QulifierMaskToString(m_Qualifiers) << *m_Base;
 }
 
-C1::AST::QualType C1::AST::PointerDeclarator::DecorateType(QualType base_type)
+C1::AST::QualType C1::AST::PrefixDeclarator::DecorateType(QualType base_type)
 {
 	auto decoratedType = QualType(MakePointer(base_type), QualifierMask());
 	if (m_Base)
@@ -156,7 +156,7 @@ C1::AST::QualType C1::AST::ArrayDeclarator::DecorateType(QualType base_type)
 	return decoratedType;
 }
 
-C1::AST::FunctionalDeclarator::FunctionalDeclarator(Declarator* base, ParameterList* param_list)
+C1::AST::FunctionalDeclarator::FunctionalDeclarator(Declarator* base, ParameterList* param_list, int qualfier_mask)
 : Declarator(base), m_Parameters(param_list)
 {
 
@@ -164,7 +164,7 @@ C1::AST::FunctionalDeclarator::FunctionalDeclarator(Declarator* base, ParameterL
 
 void C1::AST::FunctionalDeclarator::Dump(std::ostream& os) const
 {
-	os << *Base() << *m_Parameters;
+	os << *Base() << *m_Parameters << QualType::QulifierMaskToString(m_Qualifiers);
 }
 
 C1::AST::QualType C1::AST::FunctionalDeclarator::DecorateType(QualType base_type)

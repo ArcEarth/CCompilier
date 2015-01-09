@@ -144,6 +144,12 @@ namespace C1
 			{
 				return m_name;
 			}
+
+			void Rename(const std::string& name)
+			{
+
+			}
+
 			void SetName(const std::string& name)
 			{
 				m_name = name;

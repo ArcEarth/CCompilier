@@ -633,6 +633,17 @@ namespace C1
 
 		};
 
+		class BooleanLiteral : public ConstantLiteral
+		{
+		public:
+			BooleanLiteral(TypeContext* type_context, const char* raw_str, bool value);
+
+			virtual QualType ReturnType() const;
+
+			virtual void Generate(C1::PCode::CodeDome& dome);
+
+		};
+
 		class Initializer : public Expr
 		{
 		public:

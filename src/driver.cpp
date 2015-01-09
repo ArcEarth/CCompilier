@@ -4,6 +4,51 @@
 using namespace std;
 using namespace C1;
 
+template <class TDerived, class TBase>
+bool is(TBase * const pObj)
+{
+	return dynamic_cast<TDerived * const>(pObj);
+}
+
+class Translator
+{
+	ostream& os;
+	void translate(AST::Node* node)
+	{
+		using namespace AST;
+		if (is<TranslationUnit>(node))
+		{
+			auto unit = dynamic_cast<TranslationUnit*>(node);
+			for (const auto& decl : *unit)
+			{ 
+				if (is<FunctionDeclaration>(decl))
+				{ 
+					auto func = dynamic_cast<FunctionDeclaration*>(decl);
+					auto name = func->Name();
+					if (isalpha(name.front()))
+					{
+						name.front() = toupper(name.front());
+					}
+				}
+			}
+		}
+		else if (is<TypeSpecifier>(node))
+		{
+			auto typespec = dynamic_cast<TypeSpecifier*>(node);
+		}
+
+		auto alias = dynamic_cast<AST::AliasType*>(node);
+		if (alias == nullptr)
+		{
+			node->Dump(os);
+		}
+		else
+		{
+
+		}
+	}
+};
+
 int main(int argc, char *argv [])
 {
 	if (argc < 2)

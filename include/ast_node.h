@@ -38,8 +38,8 @@ namespace C1
 			Node* Parent() { return m_parent; }
 			void SetParent(Node* val) { m_parent = val; }
 
-			const Node* NextNode() const;
-			const Node* PrevNode() const;
+			const Node* NextSibling() const;
+			const Node* PrevSibling() const;
 
 			//std::string ToString() const/* = 0*/;
 

@@ -97,6 +97,7 @@ typedef C1::BisonParser::token token;
 "goto"			{ current_symbol.move(C1::BisonParser::make_GOTO(loc)); return token::GOTO;  }
 "if"			{ current_symbol.move(C1::BisonParser::make_IF(loc)); return token::IF;  }
 "int"			{ current_symbol.move(C1::BisonParser::make_INT(loc)); return token::INT;  }
+"bool"			{ current_symbol.move(C1::BisonParser::make_INT(loc)); return token::BOOL;  }
 "long"			{ current_symbol.move(C1::BisonParser::make_LONG(loc)); return token::LONG;  }
 "read"			{ current_symbol.move(C1::BisonParser::make_READ(loc)); return token::READ;  }
 "register"		{ current_symbol.move(C1::BisonParser::make_REGISTER(SCS_REGISTER,loc)); return token::REGISTER;  }
@@ -116,6 +117,16 @@ typedef C1::BisonParser::token token;
 "restrict"		{ current_symbol.move(C1::BisonParser::make_RESTRICT(RESTRICT,loc)); return token::RESTRICT; }
 "const"			{ current_symbol.move(C1::BisonParser::make_CONST(CONST,loc)); return token::CONST; }
 "volatile"		{ current_symbol.move(C1::BisonParser::make_VOLATILE(VOLATILE,loc)); return token::VOLATILE; }
+"true"			{
+					Expr* node = new AST::BooleanLiteral(pContext->type_context,yytext,true);
+					current_symbol.move(C1::BisonParser::make_BOOL_LITERAL(node,loc));
+					return token::BOOL_LITERAL;
+				}
+"false"			{
+					Expr* node = new AST::BooleanLiteral(pContext->type_context,yytext,false);
+					current_symbol.move(C1::BisonParser::make_BOOL_LITERAL(node,loc));
+					 return token::BOOL_LITERAL;
+				}
 {sci_float}		{
 					auto val = strtof(yytext,NULL);
 					Expr* node = new AST::FloatLiteral(pContext->type_context,yytext,val);

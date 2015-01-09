@@ -65,7 +65,7 @@
 	QUESTION "?"
 	;
 
-%token INT VOID FLOAT DOUBLE SIGNED UNSIGNED LONG CHAR SHORT
+%token INT VOID FLOAT DOUBLE SIGNED UNSIGNED LONG CHAR SHORT BOOL
 
 %token <StorageClassSpecifierEnum>
 	STATIC "static"
@@ -84,7 +84,7 @@
 	ENUM "enum"
 	;
 
-%token <AST::ExprPtr> INT_LITERAL FLOAT_LITERAL STRING_LITERAL
+%token <AST::ExprPtr> INT_LITERAL FLOAT_LITERAL STRING_LITERAL BOOL_LITERAL
 %token <std::string> NewIdentifier ObjectIdentifier TypeIdentifier
 
 %token <OperatorsEnum>
@@ -184,13 +184,13 @@
 
 %type <std::string> Identifier 
 
-%type <std::list<int>*> DeclaratorPointer
+%type <std::list<std::pair<OperatorsEnum,int>>*> DeclaratorPrefix
 %type <std::list<AST::Declarator*>*> DeclaratorList InitDeclaratorList FieldDeclaratorList
 %type <std::list<AST::Enumerator*>*> EnumeratorList
 %type <AST::ParameterList*> ParameterList
 %type <std::list<AST::Expr*>*> ArgumentList
 
-%type <OperatorsEnum> UnaryOperator AssignOperator
+%type <OperatorsEnum> UnaryOperator AssignOperator DeclaratorPrefixOperator
 
 %initial-action
 {
@@ -252,7 +252,7 @@ FunctionHeader
 			error(@3,"Expect a function declaration here.");
 			// WTF, what should we do to recover here?!
 			// let's wrap the declarator to declarator() and process.
-			declarator = new FunctionalDeclarator(declarator,nullptr);
+			declarator = new FunctionalDeclarator(declarator,nullptr,0);
 		}
 		auto func = new FunctionDeclaration($1,$2,static_cast<FunctionalDeclarator*>(declarator));
 		context.current_context()->add(func);
@@ -337,15 +337,17 @@ DeclaratorList
 	;
 
 Declarator
-	: DeclaratorPointer DirectDeclarator
+	: DeclaratorPrefix DirectDeclarator
 	{
 		auto& list = *$1;
 		Declarator *declarator = $2;
 		for (auto itr = list.rbegin();itr!=list.rend();++itr)
 		{
-			declarator = new PointerDeclarator(*itr,declarator);
+			declarator = new PrefixDeclarator(itr->first,itr->second,declarator);
 			declarator->SetLocation(@$);
 		}
+		delete $1;
+		$1 = nullptr;
 		$$ = declarator;
 		$$->SetLocation(@$);
 	}
@@ -376,16 +378,16 @@ DirectDeclarator
 		$$ = new ArrayDeclarator($1,nullptr);
 		$$->SetLocation(@$);
 	}
-	| DirectDeclarator LPAREN ParameterList RPAREN
+	| DirectDeclarator LPAREN ParameterList RPAREN TypeQualifierList
 	{
-		$$ = new FunctionalDeclarator($1,$3);
+		$$ = new FunctionalDeclarator($1,$3,$5);
 		$$->SetLocation(@$);
 	}
-	| DirectDeclarator LPAREN RPAREN
+	| DirectDeclarator LPAREN RPAREN TypeQualifierList
 	{
 		// Build an empty parameter list
 		auto param_list = new ParameterList();
-		$$ = new FunctionalDeclarator($1,param_list);
+		$$ = new FunctionalDeclarator($1,param_list,$4);
 		$$->SetLocation(@$);
 	}
 	;
@@ -447,15 +449,17 @@ InitializerList
 	;
 
 AbstractDeclarator
-	: DeclaratorPointer DirectAbstractDeclarator
+	: DeclaratorPrefix DirectAbstractDeclarator
 	{
 		auto& list = *$1;
 		Declarator *declarator = $2;
 		for (auto itr = list.rbegin();itr!=list.rend();++itr)
 		{
-			declarator = new PointerDeclarator(*itr,declarator);
+			declarator = new PrefixDeclarator(itr->first,itr->second,declarator);
 			$$->SetLocation(@$);
 		}
+		delete $1;
+		$1 = nullptr;
 		$$ = declarator;
 		$$->SetLocation(@$);
 	}
@@ -491,27 +495,27 @@ DirectAbstractDeclarator
 		$$ = new ArrayDeclarator($1,nullptr);
 		$$->SetLocation(@$);
 	}
-	| LPAREN ParameterList RPAREN
+	| LPAREN ParameterList RPAREN TypeQualifierList
 	{
-		$$ = new FunctionalDeclarator(nullptr,$2);
+		$$ = new FunctionalDeclarator(nullptr,$2,$4);
 		$$->SetLocation(@$);
 	}
-	| LPAREN RPAREN
+	| LPAREN RPAREN TypeQualifierList
 	{
-		$$ = new FunctionalDeclarator(nullptr,nullptr);
+		$$ = new FunctionalDeclarator(nullptr,nullptr,$3);
 		$$->SetLocation(@$);
 	}
-	| DirectAbstractDeclarator LPAREN ParameterList RPAREN
+	| DirectAbstractDeclarator LPAREN ParameterList RPAREN TypeQualifierList
 	{
-		$$ = new FunctionalDeclarator($1,$3);
+		$$ = new FunctionalDeclarator($1,$3,$5);
 		$$->SetLocation(@$);
 		$3->SetLocation(@2 + @4);
 	}
-	| DirectAbstractDeclarator LPAREN RPAREN
+	| DirectAbstractDeclarator LPAREN RPAREN TypeQualifierList
 	{
 		// Build an empty parameter list
 		auto param_list = new ParameterList();
-		$$ = new FunctionalDeclarator($1,param_list);
+		$$ = new FunctionalDeclarator($1,param_list,$4);
 		$$->SetLocation(@$);
 		param_list->SetLocation(@2 + @3);
 	}
@@ -547,15 +551,31 @@ ParameterDeclaration
 	}
 	;
 
-DeclaratorPointer
-	: MUL TypeQualifierList
+DeclaratorPrefixOperator
+	: AND
 	{
-		$$ = new std::list<int>();
-		$$->push_back($2);
+		$$ = $1;
 	}
-	| DeclaratorPointer MUL TypeQualifierList
+	| MUL
 	{
-		$$->push_back($3);
+		$$ = $1;
+	}
+	| ANDAND
+	{
+		$$ = $1;
+	}
+	;
+
+DeclaratorPrefix
+	: DeclaratorPrefixOperator TypeQualifierList
+	{
+		// Pointer
+		$$ = new std::list<std::pair<OperatorsEnum,int>>();
+		$$->emplace_back($1,$2);
+	}
+	| DeclaratorPrefix DeclaratorPrefixOperator TypeQualifierList
+	{
+		$$->emplace_back($2,$3);
 	}
 	;
 
@@ -593,6 +613,10 @@ TypeSpecifier
 	| CHAR
 	{
 		$$ = new PrimaryTypeSpecifier(context.type_context->Char());
+	}
+	| BOOL
+	{
+		$$ = new PrimaryTypeSpecifier(context.type_context->Bool());
 	}
 	| RecordSpecifier
 	{
@@ -866,6 +890,11 @@ PrimaryExpr
 		$$->SetLocation(@$);
 	}
 	| FLOAT_LITERAL
+	{
+		$$ = $1;
+		$$->SetLocation(@$);
+	}
+	| BOOL_LITERAL
 	{
 		$$ = $1;
 		$$->SetLocation(@$);
