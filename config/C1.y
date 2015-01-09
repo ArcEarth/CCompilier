@@ -618,6 +618,10 @@ TypeSpecifier
 	{
 		$$ = new PrimaryTypeSpecifier(context.type_context->Bool());
 	}
+	| AUTO
+	{
+		$$ = new PrimaryTypeSpecifier(context.type_context->Int());
+	}
 	| RecordSpecifier
 	{
 		$$ = $1;
@@ -629,6 +633,7 @@ TypeSpecifier
 	| TypeIdentifier
 	{
 		$$ = new TypedefNameSpecifier(context.current_context(),$1);
+		$$ -> SetLocation(@$);
 		/*auto decl = dynamic_cast<TypeDeclaration*>(context.current_context()->Lookup(*$1));
 		assert(decl != nullptr);
 		$$ = decl->DeclType();*/
@@ -901,8 +906,11 @@ PrimaryExpr
 	}
 	| Identifier
 	{
-		$$ = DeclRefExpr::MakeDeclRefExpr(context.current_context(),context.type_context,$1);
-		$$->SetLocation(@$);
+		auto refExpr = DeclRefExpr::MakeDeclRefExpr(context.current_context(),context.type_context,$1);
+		refExpr->SetLocation(@$);
+		// Resolve reference after setup location
+		refExpr->ResoloveReference();
+		$$ = refExpr;
 	}
 	| LPAREN Expr RPAREN
 	{

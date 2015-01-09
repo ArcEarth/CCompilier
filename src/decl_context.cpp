@@ -29,9 +29,23 @@ C1::AST::DeclContext::InsertionResult C1::AST::DeclContext::add(Declaration* dec
 	return declaration->AddToContext(*this);
 }
 
-bool C1::AST::DeclContext::rename_decl(NamedDeclaration* decl)
+bool C1::AST::DeclContext::rename_decl(NamedDeclaration* decl,const std::string& newName)
 {
-	return false;
+	auto existed = lookup_local(newName);
+	if (existed)
+		return false;
+	else {
+		if (m_pTableView)
+		{
+			auto itr = m_pTableView->find(decl->Name());
+			while (itr->first.get() == decl->Name())
+			{
+				itr = m_pTableView->erase(itr);
+			}
+			m_pTableView->emplace(newName, decl);
+		}
+		return true;
+	}
 }
 
 

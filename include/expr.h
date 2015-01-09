@@ -107,9 +107,10 @@ namespace C1
 			virtual void GenerateLValue(C1::PCode::CodeDome& dome);
 			virtual void Generate(C1::PCode::CodeDome& dome);
 
+			ValueDeclaration* ResoloveReference();
+
 		protected:
 			DeclRefExpr(DeclContext* lookup_context, TypeContext* type_context, const std::string &name);
-			ValueDeclaration* ResoloveReference();
 
 			virtual QualType ReturnType() const;
 

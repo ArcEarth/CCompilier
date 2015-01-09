@@ -92,22 +92,23 @@ namespace C1
 		//};
 
 		// Serve as an pointer of "Type" class, but provide qualifier information
-		class QualType
+		class QualType : public Qualified
 		{
 		public:
 			QualType(Type *pType = nullptr, int qualifiers_mask = 0)
-				: m_type(pType), m_qulifier_mask(qualifiers_mask)
+				: m_type(pType)
 			{
+				m_qulifier_mask = qualifiers_mask;
 			}
 
 			//QualType()
 			//	: m_type(nullptr), m_qulifier_mask(0)
 			//{}
 
-			int Qualifiers() const
-			{
-				return m_qulifier_mask;
-			}
+			//int Qualifiers() const
+			//{
+			//	return m_qulifier_mask;
+			//}
 
 			void reset(Type* type)
 			{
@@ -124,7 +125,7 @@ namespace C1
 				return m_type;
 			}
 
-			bool IsConst() const
+	/*		bool IsConst() const
 			{
 				return (m_qulifier_mask & TypeQualifierEnum::CONST) != 0;
 			}
@@ -156,7 +157,7 @@ namespace C1
 			int RemoveQualifiers(int qualfiers_mask)
 			{
 				return m_qulifier_mask &= ~qualfiers_mask;
-			}
+			}*/
 
 			inline const Type &operator*() const{
 				return *m_type;
@@ -340,12 +341,30 @@ namespace C1
 			DeclContext* m_Members;
 		};
 
+		struct InheritanceRelation
+		{
+			AccessibilityEnum Accessibility;
+			bool IsVirtual;
+			Type* BaseType;
+		};
+
 		class StructType : public RecordType
 		{
 		public:
 			~StructType();
 			static const TypeKindEnum class_kind = Struct;
 			StructType(const std::string &name = "%anonymous", DeclContext* define = nullptr);
+
+			const std::list<InheritanceRelation>& BaseTypes() const;
+
+			// If not, BaseType will be nullptr, if true, contains information about Accessibility and if virtual
+			InheritanceRelation IsDerivedOf(Type* type);
+			InheritanceRelation IsDirectDerivedOf(Type* type);
+
+			// True if contains virtual method or virtual base
+			bool IsVirtualized() const;
+			// True if contains pure virtual method
+			bool IsAbstract() const;
 
 			virtual size_t Size() const;
 

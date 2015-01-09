@@ -4,24 +4,18 @@
 using namespace std;
 using namespace C1;
 
-template <class TDerived, class TBase>
-bool is(TBase * const pObj)
-{
-	return dynamic_cast<TDerived * const>(pObj);
-}
-
 class Translator
 {
 	ostream& os;
 	void translate(AST::Node* node)
 	{
 		using namespace AST;
-		if (is<TranslationUnit>(node))
+		if (node->Is<TranslationUnit>())
 		{
-			auto unit = dynamic_cast<TranslationUnit*>(node);
-			for (const auto& decl : *unit)
+			auto unit = node->As<TranslationUnit>();
+			for (const auto& decl : unit->Children())
 			{ 
-				if (is<FunctionDeclaration>(decl))
+				if (decl->Is<FunctionDeclaration>())
 				{ 
 					auto func = dynamic_cast<FunctionDeclaration*>(decl);
 					auto name = func->Name();
@@ -29,12 +23,19 @@ class Translator
 					{
 						name.front() = toupper(name.front());
 					}
+					func->Rename(name);
 				}
 			}
 		}
-		else if (is<TypeSpecifier>(node))
+		else if (node->Is<TypedefNameSpecifier>())
 		{
-			auto typespec = dynamic_cast<TypeSpecifier*>(node);
+			auto typespec = node->As<TypeSpecifier>();
+			auto type = typespec->RepresentType();
+			if (type->IsAliasType())
+			{
+				auto alias = dynamic_cast<AliasType*>(type);
+				alias->Name();
+			}
 		}
 
 		auto alias = dynamic_cast<AST::AliasType*>(node);

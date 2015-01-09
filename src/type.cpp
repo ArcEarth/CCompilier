@@ -712,7 +712,7 @@ namespace C1
 				auto list = rhs.As<InitializerListType>();
 				if (!list->IsArrayType())
 					return false;
-				if (list->ElementTypes().size() > lhs.As<ArrayType>()->Length())
+				if ((int)list->ElementTypes().size() > lhs.As<ArrayType>()->Length())
 					return false;
 				auto r_element = list->ElementTypes().front();
 				return is_type_assignable(l_element, r_element);

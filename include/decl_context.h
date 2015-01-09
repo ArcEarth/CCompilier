@@ -104,7 +104,7 @@ namespace C1
 			InsertionResult add(Declaration* declaration);
 
 			// Return if the rename operation succeed
-			bool rename_decl(NamedDeclaration* decl);
+			bool rename_decl(NamedDeclaration* decl, const std::string& newName);
 
 			void force_add(NamedDeclaration* decl);
 			void force_add(Declaration* decl);

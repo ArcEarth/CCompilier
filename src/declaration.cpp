@@ -134,6 +134,16 @@ void C1::AST::FunctionDeclaration::SetDefinition(Stmt* def)
 	def->SetParent(this);
 }
 
+bool C1::AST::FunctionDeclaration::Rename(const std::string& name) 
+{
+	if (Affiliation()->rename_decl(this, name))
+	{
+		m_name = name;
+		return true;
+	}
+	return false;
+}
+
 void C1::AST::FunctionDeclaration::Generate(C1::PCode::CodeDome& dome)
 {
 	if (m_Definition)

@@ -23,8 +23,71 @@ namespace C1
 		STRUCT = 1,
 		UNION = 2,
 		ENUM = 3,
+		CLASS = 4,
 	};
 
+	enum AccessablityEnum
+	{
+		PRIVATE = 1,
+		PROTECTED = 2,
+		PUBLIC = 3,
+	};
+
+	struct Qualified
+	{
+		Qualified()
+			: m_qulifier_mask(0)
+		{}
+
+		explicit Qualified(int mask)
+			: m_qulifier_mask(mask)
+		{}
+
+		inline Qualified& operator=(int mask)
+		{
+			m_qulifier_mask = mask;
+		}
+
+		int Qualifiers() const
+		{
+			return m_qulifier_mask;
+		}
+
+		bool IsConst() const
+		{
+			return (m_qulifier_mask & TypeQualifierEnum::CONST) != 0;
+		}
+		bool IsRestrict() const
+		{
+			return (m_qulifier_mask & TypeQualifierEnum::RESTRICT) != 0;
+		}
+		bool IsVolatile() const
+		{
+			return (m_qulifier_mask & TypeQualifierEnum::VOLATILE) != 0;
+		}
+		int AddConst()
+		{
+			return m_qulifier_mask |= TypeQualifierEnum::CONST;
+		}
+
+		int RemoveConst()
+		{
+			return m_qulifier_mask &= ~TypeQualifierEnum::CONST;
+		}
+
+		int AddQualifiers(int qualfiers_mask)
+		{
+			return m_qulifier_mask |= qualfiers_mask;
+		}
+
+		int RemoveQualifiers(int qualfiers_mask)
+		{
+			return m_qulifier_mask &= ~qualfiers_mask;
+		}
+
+	protected:
+		int m_qulifier_mask;
+	};
 #ifdef _IOSTREAM_
 	inline std::ostream& operator<<(std::ostream& os, StorageClassSpecifierEnum scs)
 	{

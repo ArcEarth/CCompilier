@@ -184,9 +184,9 @@ void C1::AST::CallExpr::Generate(C1::PCode::CodeDome& dome)
 }
 
 C1::AST::DeclRefExpr::DeclRefExpr(DeclContext* lookup_context, TypeContext* type_context, const std::string &name)
-: m_Name(name), m_RefContext(lookup_context), m_TypeContext(type_context)
+	: m_Name(name), m_RefContext(lookup_context), m_TypeContext(type_context), m_RefDecl(nullptr)
 {
-	ResoloveReference();
+	//ResoloveReference();
 }
 
 void C1::AST::DeclRefExpr::Dump(std::ostream& os) const
@@ -203,7 +203,7 @@ ValueDeclaration* C1::AST::DeclRefExpr::ResoloveReference()
 	m_RefDecl = dynamic_cast<ValueDeclaration*>(decl);
 	if (!m_RefDecl)
 	{
-		error(this, "Can not find the declaration of name ""<name>"", assuming int");
+		error(this, "Can not find the type declaration of name '" + m_Name + "', assuming int");
 		m_RefDecl = new VariableDeclaration(QualType(m_TypeContext->Int()), m_Name);
 		m_RefContext->add(m_RefDecl);
 	}

@@ -38,6 +38,19 @@ namespace C1
 			void Dump(std::ostream&) const;
 		};
 
+		class AccessDeclaration : public Node
+		{
+			AccessibilityEnum Accessibility;
+		};
+
+		class BaseClassSpecifier : public Node
+		{
+			AccessibilityEnum Accessbility() const;
+			bool IsVirtualBase() const;
+			TypeSpecifier* BaseClass() const;
+		};
+
+
 		class StructBody :public Node, public ScopeNode, public DeclContext
 		{
 		public:
@@ -49,6 +62,12 @@ namespace C1
 
 			// Not considering manual offset assign yet
 			void GenerateFieldsLayout();
+		};
+
+		class ClassBody : public StructBody
+		{
+			std::list<BaseClassSpecifier*>& BaseClasses();
+			std::list<MemberMethodDeclaration*> Constructors();
 		};
 
 		// represent a struct specifier
@@ -94,6 +113,10 @@ namespace C1
 		public:
 			TypedefNameSpecifier(DeclContext* pContext, const std::string& name);
 			void Dump(std::ostream&) const;
+
+			const std::string& Name() const { return m_Name; }
+			void SetName(const std::string& name) { m_Name = name; }
+			bool Rename(const std::string& newName);
 		protected:
 			std::string m_Name;
 			TypeDeclaration* m_RefDecl;

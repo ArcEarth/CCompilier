@@ -46,10 +46,35 @@ namespace C1
 			virtual void Dump(std::ostream& ostr) const = 0;
 			virtual void Generate(C1::PCode::CodeDome& dome); // Do nothing
 
+			template <class TDerived>
+			bool Is() const
+			{
+				return dynamic_cast<const TDerived *>(this) != nullptr;
+			}
+
+			template <class TDerived>
+			const TDerived* As() const
+			{
+				return dynamic_cast<const TDerived *>(this);
+			}
+
+			template <class TDerived>
+			TDerived* As()
+			{
+				return dynamic_cast<TDerived *>(this);
+			}
+
 			virtual ~Node();
-		private:
+		protected:
 			LocationType m_location;
-			Node* m_parent;
+
+			Node*		m_parent;
+
+			//Node*		m_firstChild;
+			//Node*		m_lastChild;
+
+			//Node*		m_prev;
+			//Node*		m_next;
 		};
 
 		inline std::ostream& operator<<(std::ostream& os, const Node& node)

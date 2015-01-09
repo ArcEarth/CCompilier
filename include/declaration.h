@@ -16,17 +16,22 @@ namespace C1
 {
 	namespace AST
 	{
+		class RedeclarableBase
+		{
+		protected:
+			RedeclarableBase *m_pPrevRedecl, *m_pNextRedecl;
+		};
 
 		template <typename DeclarationType>
-		class Redeclarable
+		class Redeclarable : public RedeclarableBase
 		{
 		public:
 			static const bool redeclarable = true;
 
-			const DeclarationType* prev() const { return m_pPrev; }
-			DeclarationType* prev() { return m_pPrev; }
-			const DeclarationType* next() const { return m_pNext; }
-			DeclarationType* next() { return m_pNext; }
+			const DeclarationType* prev() const { return static_cast<const DeclarationType*>(m_pPrevRedecl); }
+			DeclarationType* prev() { return static_cast<DeclarationType*>(m_pPrevRedecl); }
+			const DeclarationType* next() const { return static_cast<const DeclarationType*>(m_pNextRedecl); }
+			DeclarationType* next() { return static_cast<DeclarationType*>(m_pNextRedecl);; }
 
 			const DeclarationType* first() const
 			{
@@ -55,14 +60,14 @@ namespace C1
 			void add_last(DeclarationType* new_decl)
 			{
 				auto decl = last();
-				decl->m_pNext = new_decl;
-				new_decl->m_pPrev = decl;
+				decl->m_pNextRedecl = new_decl;
+				new_decl->m_pPrevRedecl = decl;
 			}
 			void add_first(DeclarationType* new_decl)
 			{
 				auto decl = first();
-				decl->m_pPrev = new_decl;
-				new_decl->m_pNext = decl;
+				decl->m_pPrevRedecl = new_decl;
+				new_decl->m_pNextRedecl = decl;
 			}
 
 			size_t redefination_count() const
@@ -80,8 +85,6 @@ namespace C1
 				}
 				return count;
 			}
-		protected:
-			DeclarationType *m_pPrev, *m_pNext;
 		};
 
 		// Represent an declaration in Semantic , the unit for lookup
@@ -108,6 +111,8 @@ namespace C1
 			const DeclContext* Affiliation() const { return m_Affiliation; }
 			DeclContext* Affiliation() { return m_Affiliation; }
 			void SetAffiliation(DeclContext* affiliation) { m_Affiliation = affiliation; }
+
+			AccessibilityEnum Accessbility() const;
 
 			// get the node which contains this declaration literally
 			// return self for non-compound-declarations like ParameterDeclaration, FunctionDeclaration, StructDeclaration
@@ -145,9 +150,14 @@ namespace C1
 				return m_name;
 			}
 
-			void Rename(const std::string& name)
+			virtual	bool Rename(const std::string& name)
 			{
-
+				if (Affiliation()->rename_decl(this,name))
+				{
+					m_name = name;
+					return true;
+				}
+				return false;
 			}
 
 			void SetName(const std::string& name)
@@ -231,7 +241,6 @@ namespace C1
 			static const size_t	Offset_Auto = -1;
 
 			const Type* ParentRecordType() const;
-			const int AccessModifier() const;
 
 			const Expr* OffsetExpr() const;
 			
@@ -270,6 +279,9 @@ namespace C1
 			Stmt* LatestDefinition();
 			const Stmt* LatestDefinition() const;
 
+			virtual	bool Rename(const std::string& name) override;
+			bool RenameAllRedeclaration(const std::string& name);
+
 			ParameterList& Parameters();
 			QualType ReturnType();
 			// It should always be negative
@@ -277,7 +289,7 @@ namespace C1
 
 			void Dump(std::ostream&) const;
 
-			virtual DeclContext::InsertionResult AddToContext(DeclContext& context);
+			virtual DeclContext::InsertionResult AddToContext(DeclContext& context) override;
 
 			virtual void Generate(C1::PCode::CodeDome& dome);
 
@@ -287,6 +299,25 @@ namespace C1
 			std::unique_ptr<FunctionalDeclarator>	m_Declarator;
 			std::unique_ptr<Stmt>					m_Definition;
 			//QualType								m_FunctionType;
+		};
+
+		class ClassMethodDeclaration : public FunctionDeclaration, public Qualified
+		{
+		public:
+			ClassMethodDeclaration(StorageClassSpecifierEnum scs, QualifiedTypeSpecifier *qualified_type_specifier, FunctionalDeclarator* declarator);
+			Type* ThisType();
+			bool IsVirtual() const;
+			bool IsPureVirtual() const;
+			bool IsDeleted() const;
+			bool IsOverride() const;
+		};
+
+		class ClassConstructorDeclaration : ClassMethodDeclaration
+		{
+		};
+
+		class ClassDestructorDeclaration : ClassMethodDeclaration
+		{
 		};
 
 		// Represent an Parameter Declaration
