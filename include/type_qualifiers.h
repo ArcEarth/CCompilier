@@ -26,7 +26,7 @@ namespace C1
 		CLASS = 4,
 	};
 
-	enum AccessablityEnum
+	enum AccessibilityEnum
 	{
 		PRIVATE = 1,
 		PROTECTED = 2,

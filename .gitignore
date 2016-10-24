@@ -172,3 +172,7 @@ stack.hh
 
 # Intermediate files for testing
 test/*.o
+*.db
+*.db-shm
+CCompilier.sln.db-wal
+*.opendb

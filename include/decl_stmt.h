@@ -67,7 +67,7 @@ namespace C1
 		class ClassBody : public StructBody
 		{
 			std::list<BaseClassSpecifier*>& BaseClasses();
-			std::list<MemberMethodDeclaration*> Constructors();
+			std::list<ClassMethodDeclaration*> Constructors();
 		};
 
 		// represent a struct specifier

@@ -63,6 +63,7 @@
 	SEMICOLON ";"
 	COLON ":"
 	QUESTION "?"
+	TEMPLATE "template"
 	;
 
 %token INT VOID FLOAT DOUBLE SIGNED UNSIGNED LONG CHAR SHORT BOOL
@@ -191,6 +192,8 @@
 %type <std::list<AST::Expr*>*> ArgumentList
 
 %type <OperatorsEnum> UnaryOperator AssignOperator DeclaratorPrefixOperator
+
+%type <std::list<AST::TemplateArgument>> TemplateArgumentList
 
 %initial-action
 {
